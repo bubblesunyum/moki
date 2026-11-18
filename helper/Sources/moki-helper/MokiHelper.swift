@@ -12,6 +12,7 @@ struct MokiHelper {
         let transport = StdioTransport()
         let server = RPCServer(transport: transport)
         await server.registerBuiltinMethods()
+        await server.register("accounts.list", handler: googleAccountsListHandler())
         await server.run()
     }
 }
