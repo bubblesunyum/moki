@@ -24,8 +24,15 @@ public struct PsymailImportOutcome: Sendable {
     }
 }
 
+/// Reads on a plain dispatch thread: the read can block indefinitely on
+/// macOS's other-app-data consent, and a blocked cooperative-pool thread
+/// would starve every other request in the helper.
 func defaultPsymailFileReader(url: URL) async -> Data? {
-    try? Data(contentsOf: url)
+    await withCheckedContinuation { continuation in
+        DispatchQueue.global(qos: .utility).async {
+            continuation.resume(returning: try? Data(contentsOf: url))
+        }
+    }
 }
 
 /// Loads Moki's refresh tokens and imports psymail-mini's. Imported tokens
@@ -157,18 +164,36 @@ public final class PsymailTokenImporter: @unchecked Sendable {
     /// (the background task keeps running and still persists on completion).
     public func wait(timeout: Duration) async -> PsymailImportOutcome? {
         let current = ensureTask()
-        return await withTaskGroup(of: PsymailImportOutcome?.self) { group in
-            group.addTask {
-                await current.value
-            }
-            group.addTask {
+        // Not a task group: a group waits for every child before returning,
+        // and awaiting `current.value` ignores cancellation, so the deadline
+        // would never fire while the read is blocked.
+        let race = FirstResult<PsymailImportOutcome?>()
+        return await withCheckedContinuation { continuation in
+            race.install(continuation)
+            Task { race.resolve(await current.value) }
+            Task {
                 try? await Task.sleep(for: timeout)
-                return nil
+                race.resolve(nil)
             }
-            guard let first = await group.next() else { return nil }
-            group.cancelAll()
-            return first
         }
+    }
+}
+
+/// Resumes a continuation with whichever value arrives first; later ones are dropped.
+private final class FirstResult<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Never>?
+
+    func install(_ continuation: CheckedContinuation<Value, Never>) {
+        lock.withLock { self.continuation = continuation }
+    }
+
+    func resolve(_ value: Value) {
+        let pending = lock.withLock { () -> CheckedContinuation<Value, Never>? in
+            defer { continuation = nil }
+            return continuation
+        }
+        pending?.resume(returning: value)
     }
 }
 
