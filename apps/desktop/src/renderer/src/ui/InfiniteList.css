@@ -1,0 +1,11 @@
+.moki-infinite-list-sentinel {
+  height: 1px;
+}
+
+.moki-infinite-list-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--moki-space-8);
+  padding: var(--moki-space-12);
+}

@@ -1,0 +1,11 @@
+.moki-messages-toolbar {
+  display: flex;
+  align-items: center;
+  padding-bottom: var(--moki-space-8);
+  /* Brief §4: hairline under the toolbar. */
+  border-bottom: 1px solid var(--moki-divider-line);
+}
+
+.moki-messages-toolbar-search {
+  margin-left: auto;
+}

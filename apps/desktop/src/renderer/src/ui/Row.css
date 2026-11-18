@@ -52,3 +52,20 @@
   border: var(--moki-selection-edge);
   box-shadow: var(--moki-selection-shadow);
 }
+
+/* Native-button rows (MessageRow): reset the UA button chrome so the row
+ * keeps its full-bleed hit area; keyboard focus gets the token ring. */
+button.moki-row {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+button.moki-row:focus-visible {
+  outline: 1px solid var(--moki-accent-cyan);
+  outline-offset: -1px;
+}

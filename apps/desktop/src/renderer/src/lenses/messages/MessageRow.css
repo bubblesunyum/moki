@@ -1,0 +1,13 @@
+.moki-message-row {
+  cursor: pointer;
+}
+
+.moki-message-row:hover:not(.selected-lit) {
+  background: var(--moki-quiet-fill);
+}
+
+/* Token-based keyboard focus ring for the native-button row. */
+.moki-message-row:focus-visible {
+  outline: 1px solid var(--moki-accent-cyan);
+  outline-offset: -1px;
+}

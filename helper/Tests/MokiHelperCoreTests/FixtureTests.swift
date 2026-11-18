@@ -54,6 +54,12 @@ struct FixtureTests {
         }
         #expect(all.filter(\.unread).count >= 3)
         #expect(all.filter { $0.messageCount == 3 }.count == 1)
+
+        // One row carries a long subject for truncation verification.
+        #expect(
+            all.map(\.subject).contains(
+                "Audience segments look great, sending to the full list tomorrow morning unless you object"
+            ))
     }
 
     @Test func fixtureGetThreadServesHTMLAndPlainText() throws {
@@ -69,10 +75,14 @@ struct FixtureTests {
         #expect(plain.messages.first?.html == nil)
         #expect((plain.messages.first?.text ?? "").contains("6:30"))
 
-        // The 3-message thread carries a reply from me.
+        // The 3-message thread carries a reply from me, with mixed html
+        // and plain text plus one long paragraph.
         let priya = try MailFixtures.getThread(account: "bubbles@example.com", id: "f3")
         #expect(priya.messages.count == 3)
         #expect(priya.messages.filter(\.isFromMe).count == 1)
+        #expect(priya.messages.contains(where: { $0.html != nil }))
+        #expect(priya.messages.contains(where: { $0.html == nil && ($0.text ?? "").contains("5th") }))
+        #expect(priya.messages.contains(where: { ($0.html ?? "").contains("corner booth") }))
 
         #expect(throws: InvalidParamsError.self) {
             try MailFixtures.getThread(account: "bubbles@example.com", id: "nope")

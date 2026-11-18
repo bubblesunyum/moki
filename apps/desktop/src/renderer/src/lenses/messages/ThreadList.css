@@ -1,0 +1,65 @@
+.moki-thread-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--moki-space-8) 0;
+}
+
+.moki-thread-list-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  padding: var(--moki-space-8) var(--moki-space-12);
+  color: var(--moki-color-faint);
+}
+
+.moki-thread-list-skeleton {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--moki-space-12);
+  padding: var(--moki-space-12);
+}
+
+.moki-thread-list-skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--moki-quiet-fill);
+  animation: moki-thread-list-pulse 1.4s ease-in-out infinite;
+}
+
+.moki-thread-list-skeleton-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  padding-top: 2px;
+}
+
+.moki-thread-list-skeleton-line {
+  height: 12px;
+  border-radius: var(--moki-radius-inset);
+  background: var(--moki-quiet-fill);
+  animation: moki-thread-list-pulse 1.4s ease-in-out infinite;
+}
+
+.moki-thread-list-skeleton-line--name {
+  width: 42%;
+}
+
+.moki-thread-list-skeleton-line--preview {
+  width: 88%;
+}
+
+@keyframes moki-thread-list-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}

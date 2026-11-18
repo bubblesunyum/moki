@@ -1,0 +1,8 @@
+.moki-quiet-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--moki-space-8);
+  padding: var(--moki-space-24) var(--moki-space-12);
+  color: var(--moki-color-muted);
+}

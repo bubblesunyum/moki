@@ -1,0 +1,127 @@
+.moki-thread {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.moki-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Bottom-anchored: margin-top auto pins short threads to the bottom while
+ * long threads still scroll from the top. */
+.moki-thread-history {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-12);
+  padding: var(--moki-space-12);
+}
+
+/* Subject line: 15/500 muted (brief §5). */
+.moki-thread-subject {
+  padding: 0 var(--moki-space-4);
+}
+
+.moki-thread-subject-text {
+  font-weight: 500;
+}
+
+.moki-email {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  min-width: 0;
+}
+
+.moki-email-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--moki-space-8);
+  padding: 0 var(--moki-space-4);
+}
+
+.moki-email-sender {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Email card: quiet fill, radius 12, 14/16 padding (brief §5). The lens-body
+ * class carries the 15/400/1.55 white body type. */
+.moki-email-card {
+  background: var(--moki-quiet-fill);
+  border-radius: var(--moki-radius-card);
+  padding: 14px 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.moki-email-html {
+  display: block;
+  min-width: 0;
+}
+
+.moki-email-plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.moki-email-plain a {
+  color: var(--moki-accent-cyan);
+}
+
+.moki-email-empty {
+  color: var(--moki-color-faint);
+}
+
+/* Quiet states: an icon or one line, never a paragraph. */
+.moki-thread-empty,
+.moki-thread-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--moki-space-8);
+  color: var(--moki-color-faint);
+  padding: var(--moki-space-12);
+}
+
+.moki-thread-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-12);
+  padding: var(--moki-space-12);
+}
+
+.moki-thread-subject-skeleton,
+.moki-thread-card-skeleton {
+  background: var(--moki-quiet-fill);
+  border-radius: var(--moki-radius-card);
+  animation: moki-thread-pulse 1.2s ease-in-out infinite;
+}
+
+.moki-thread-subject-skeleton {
+  height: 20px;
+  width: 45%;
+}
+
+.moki-thread-card-skeleton {
+  height: 96px;
+}
+
+@keyframes moki-thread-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}

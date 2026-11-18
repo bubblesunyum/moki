@@ -134,10 +134,10 @@ public enum MailFixtures {
             single(
                 id: "f4", account: fixtureWorkAccount,
                 fromName: "Luis", fromAddress: "luis@example.com",
-                subject: "Q3 planning doc",
-                snippet: "Left comments on the headcount tab — take a look…",
+                subject: "Audience segments look great, sending to the full list tomorrow morning unless you object",
+                snippet: "Sending to the full list tomorrow morning unless you object…",
                 hoursAgo: 3, unread: false,
-                text: "Left comments on the headcount tab — take a look when you get a chance."),
+                text: "Sending to the full list tomorrow morning unless you object. Left comments on the headcount tab — take a look when you get a chance."),
             single(
                 id: "f5", account: fixturePersonalAccount,
                 fromName: "Tasha", fromAddress: "tasha@example.com",
@@ -194,8 +194,11 @@ public enum MailFixtures {
                 text: "Approved — this reimburses on Friday's cycle."),
         ]
 
-        // Priya: the 3-message thread (one reply from me).
+        // Priya: the 3-message thread (one reply from me). Mixed html and
+        // plain text, with one long paragraph for wrapping verification.
         let priya = EmailAddress(name: "Priya", address: "priya@example.com")
+        let priyaHTML =
+            #"<html><body><p>7ish is perfect, see you there! I booked the corner booth by the window since it is quieter there and we will actually be able to hear each other, and if Thursday ends up being a problem for any reason just let me know before noon and I can push the whole thing to Friday without losing the table.</p></body></html>"#
         let priyaMessages = [
             MailMessage(
                 id: "f3-m1", from: priya, to: [personalMe], cc: [],
@@ -207,8 +210,9 @@ public enum MailFixtures {
                 text: "Thursday works! 7ish?", isFromMe: true),
             MailMessage(
                 id: "f3-m3", from: priya, to: [personalMe], cc: [],
-                date: date(hoursAgo: 26), html: nil,
-                text: "7ish is perfect, see you there!", isFromMe: false),
+                date: date(hoursAgo: 26), html: priyaHTML,
+                text: "7ish is perfect, see you there!",
+                isFromMe: false),
         ]
         let priyaSummary = ThreadSummary(
             id: "f3", account: fixturePersonalAccount, from: priya,
