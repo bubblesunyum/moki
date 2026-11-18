@@ -1,5 +1,8 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
+import { HelperProcess, resolveHelperBinary, setupHelperIpc } from './helper/index'
+
+let helper: HelperProcess | null = null
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -33,6 +36,22 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  helper = new HelperProcess({ binaryPath: resolveHelperBinary(app.getAppPath()) })
+  helper.start()
+  setupHelperIpc(ipcMain, shell, helper, () => BrowserWindow.getAllWindows())
+
+  // Dev smoke: prove the stdio round-trip once at startup.
+  if (!app.isPackaged) {
+    void helper
+      .call<{ ok: boolean; version: string }>('helper.ping')
+      .then((result) => {
+        console.log(`[helper] ping ok (version ${result.version})`)
+      })
+      .catch((err: unknown) => {
+        console.error(`[helper] startup ping failed: ${String(err)}`)
+      })
+  }
+
   createWindow()
 
   app.on('activate', () => {
@@ -40,6 +59,11 @@ void app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  helper?.dispose()
+  helper = null
 })
 
 app.on('window-all-closed', () => {
