@@ -1,0 +1,5 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+minimumReleaseAgeExclude:
+  - electron@45.3.4
