@@ -4,17 +4,8 @@
       {
         "hooks": [
           {
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" \u0026\u0026 scripts/harness session --hook",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && scripts/harness session --hook",
             "timeout": 60,
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
-      {
-        "hooks": [
-          {
-            "command": "bd prime --hook-json",
             "type": "command"
           }
         ],
