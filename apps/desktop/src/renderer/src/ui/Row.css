@@ -1,0 +1,54 @@
+.moki-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--moki-space-12);
+  padding: var(--moki-space-12);
+  border: 1px solid transparent;
+  border-radius: var(--moki-radius-row);
+  box-sizing: border-box;
+}
+
+.moki-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-2);
+}
+
+.moki-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--moki-space-8);
+  min-width: 0;
+}
+
+.moki-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moki-row-meta {
+  flex: none;
+}
+
+.moki-row-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moki-row-trailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.moki-row.selected-lit {
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  box-shadow: var(--moki-selection-shadow);
+}

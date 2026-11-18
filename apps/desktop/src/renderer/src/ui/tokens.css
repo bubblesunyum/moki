@@ -1,0 +1,220 @@
+/* Moki design tokens — dark only.
+ * Source of truth for every hex in the renderer (see docs/design/messages-brief.md §1).
+ * Components must use these variables; no raw hex outside this file. */
+
+:root {
+  --moki-font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Text */
+  --moki-color-ink: #e4e9ef;
+  --moki-color-muted: #ffffffcf; /* white 81% */
+  --moki-color-faint: #ffffff8f; /* white 56% */
+  --moki-color-ground: #0d1116;
+
+  /* Accents */
+  --moki-accent-cyan: #3de8ff;
+  --moki-accent-violet: #8b6cff;
+  --moki-accent-mint: #5cf2b0;
+  --moki-accent-amber: #ffc46b;
+  --moki-accent-coral: #ff6b8b;
+
+  /* Glyph ink on solid accent fills (e.g. avatar source badges) */
+  --moki-badge-ink: #0a0d1a;
+
+  /* Avatar ring + initials */
+  --moki-avatar-ring: 1px solid rgba(255, 255, 255, 0.28);
+  --moki-avatar-ink: #fff;
+
+  /* Spacing scale */
+  --moki-space-2: 2px;
+  --moki-space-4: 4px;
+  --moki-space-8: 8px;
+  --moki-space-12: 12px;
+  --moki-space-24: 24px;
+
+  /* Radii */
+  --moki-radius-inset: 4px;
+  --moki-radius-control: 6px;
+  --moki-radius-row: 8px;
+  --moki-radius-card: 12px;
+  --moki-radius-window: 24px;
+  --moki-radius-pill: 999px;
+
+  /* Glass (Figma blur radii are ~2x CSS: 40 -> 20px, 60 -> 30px) */
+  --moki-glass-blur: 20px;
+  --moki-glass-shadow: 0 24px 48px #00000059;
+  --moki-glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  --moki-glass-edge: 1px solid rgba(255, 255, 255, 0.28);
+  --moki-popover-blur: 30px;
+  --moki-popover-shadow: 0 32px 80px #0000008c;
+
+  /* Quiet fill: white at 6% — bubbles, inputs, chips */
+  --moki-quiet-fill: rgba(255, 255, 255, 0.06);
+
+  /* Shared selection ("Selection · lit", brief §1) */
+  --moki-selection-fill:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(90deg, rgba(61, 232, 255, 0.22), rgba(139, 108, 255, 0.22));
+  --moki-selection-edge: 1px solid rgba(255, 255, 255, 0.42);
+  --moki-selection-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.22),
+    0 0 6px rgba(95, 184, 255, 0.22);
+
+  /* Accent gradient: outgoing bubbles */
+  --moki-accent-gradient: linear-gradient(90deg, #3de8ff, #8b6cff);
+
+  /* Avatar gradient palette (brief §4). Seeded by name hash in Avatar. */
+  --moki-avatar-0-a: #9b7bff;
+  --moki-avatar-0-b: #5a4ba0;
+  --moki-avatar-1-a: #ffc94a;
+  --moki-avatar-1-b: #f07b2e;
+  --moki-avatar-2-a: #7be08a;
+  --moki-avatar-2-b: #2e9e6b;
+  --moki-avatar-3-a: #6fa8ff;
+  --moki-avatar-3-b: #4256d6;
+  --moki-avatar-4-a: #ffb86b;
+  --moki-avatar-4-b: #d9534f;
+  --moki-avatar-5-a: #4fd1e8;
+  --moki-avatar-5-b: #2c7fb8;
+  --moki-avatar-6-a: #c3a6ff;
+  --moki-avatar-6-b: #7e5bef;
+  --moki-avatar-7-a: #f5d76e;
+  --moki-avatar-7-b: #c49a22;
+  --moki-avatar-8-a: #ff8a8a;
+  --moki-avatar-8-b: #c2366b;
+  --moki-avatar-9-a: #86e3ce;
+  --moki-avatar-9-b: #3ba99c;
+  --moki-avatar-10-a: #a0c4ff;
+  --moki-avatar-10-b: #5e6ad2;
+  --moki-avatar-11-a: #ffa6c9;
+  --moki-avatar-11-b: #e0607e;
+  --moki-avatar-12-a: #b9e769;
+  --moki-avatar-12-b: #5fa83a;
+  --moki-avatar-13-a: #f78fb3;
+  --moki-avatar-13-b: #9b59b6;
+  --moki-avatar-14-a: #55e6c1;
+  --moki-avatar-14-b: #1b9cfc;
+  --moki-avatar-15-a: #fd7272;
+  --moki-avatar-15-b: #c44569;
+  --moki-avatar-16-a: #82ccdd;
+  --moki-avatar-16-b: #3c6382;
+}
+
+/* Window backdrop (brief §1): base gradient + four blurred glows + 12% dim. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--moki-font);
+  color: var(--moki-color-ink);
+  background: linear-gradient(160deg, #0b1030 0%, #090a1a 55%, #140a22 100%);
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(350px 250px at 350px 50px, rgba(59, 91, 255, 0.45), transparent 70%),
+    radial-gradient(300px 300px at 50px 800px, rgba(255, 79, 163, 0.28), transparent 70%),
+    radial-gradient(350px 210px at 1100px 860px, rgba(0, 216, 198, 0.22), transparent 70%),
+    radial-gradient(210px 160px at 890px 280px, rgba(139, 108, 255, 0.3), transparent 70%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* Type scale: the six Lenses/* styles (Figma line-height 100 -> normal). */
+.lens-text {
+  font-family: var(--moki-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: normal;
+  color: var(--moki-color-muted);
+}
+
+.lens-control {
+  font-family: var(--moki-font);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: normal;
+  color: var(--moki-color-muted);
+}
+
+.lens-control-selected {
+  font-family: var(--moki-font);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+  color: #fff;
+}
+
+.lens-small {
+  font-family: var(--moki-font);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: normal;
+  color: var(--moki-color-faint);
+}
+
+.lens-title {
+  font-family: var(--moki-font);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: normal;
+  color: var(--moki-color-ink);
+}
+
+.lens-body {
+  font-family: var(--moki-font);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #fff;
+}
+
+/* Tone overrides for Text. Declared after the variants so they win. */
+.tone-ink {
+  color: var(--moki-color-ink);
+}
+
+.tone-muted {
+  color: var(--moki-color-muted);
+}
+
+.tone-faint {
+  color: var(--moki-color-faint);
+}
+
+.tone-white {
+  color: #fff;
+}
+
+.tone-inherit {
+  color: inherit;
+}
+
+/* Shared selection (brief §6): used by sidebar rows, segments and list rows. */
+.selected-lit {
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  box-shadow: var(--moki-selection-shadow);
+}

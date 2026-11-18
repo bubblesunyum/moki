@@ -1,0 +1,36 @@
+.moki-avatar {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  border: var(--moki-avatar-ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.moki-avatar-initials {
+  font-family: var(--moki-font);
+  color: var(--moki-avatar-ink);
+  user-select: none;
+  line-height: 1;
+}
+
+.moki-avatar-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: inline-flex;
+}
+
+.moki-avatar-badge-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--moki-badge-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}

@@ -1,0 +1,8 @@
+.moki-glass-pane {
+  background: var(--moki-glass-fill);
+  border: var(--moki-glass-edge);
+  backdrop-filter: blur(var(--moki-glass-blur));
+  -webkit-backdrop-filter: blur(var(--moki-glass-blur));
+  box-shadow: var(--moki-glass-shadow);
+  box-sizing: border-box;
+}

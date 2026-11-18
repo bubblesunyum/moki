@@ -1,0 +1,41 @@
+.moki-segment-group {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 0;
+  border-radius: var(--moki-radius-control);
+  background: transparent;
+}
+
+.moki-segment-group-track {
+  background: var(--moki-quiet-fill);
+}
+
+.moki-segment {
+  width: 40px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--moki-radius-inset);
+  background: transparent;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.moki-segment:hover {
+  background: var(--moki-quiet-fill);
+}
+
+.moki-segment.selected-lit {
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  box-shadow: var(--moki-selection-shadow);
+}
+
+.moki-segment:focus-visible {
+  outline: 1px solid var(--moki-accent-cyan);
+  outline-offset: 1px;
+}

@@ -1,0 +1,29 @@
+.moki-icon-button {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--moki-radius-row);
+  background: transparent;
+  color: var(--moki-color-muted);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.moki-icon-button:hover {
+  background: var(--moki-quiet-fill);
+}
+
+.moki-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.moki-icon-button:focus-visible {
+  outline: 1px solid var(--moki-accent-cyan);
+  outline-offset: 1px;
+}
