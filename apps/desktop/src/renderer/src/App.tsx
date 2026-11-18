@@ -1,10 +1,16 @@
-import { PrimitivesPage } from './dev/Primitives'
+import { RpcProvider } from './rpc'
+import { Shell } from './shell/Shell'
+import { ShellProvider } from './shell/ShellProvider'
 
-export default function App(): React.JSX.Element | null {
-  // The shell (app shell bead) owns the production window. Until then, dev
-  // gets the primitives showcase full-window on the backdrop.
-  if (!import.meta.env.DEV) {
-    return null
-  }
-  return <PrimitivesPage />
+/* Production window: shell (sidebar + lens content + inspector) on the
+ * backdrop. The Primitives showcase stays reachable in dev from the
+ * sidebar entry and Cmd+Shift+P. */
+export default function App(): React.JSX.Element {
+  return (
+    <RpcProvider>
+      <ShellProvider>
+        <Shell />
+      </ShellProvider>
+    </RpcProvider>
+  )
 }

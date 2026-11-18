@@ -1,0 +1,19 @@
+.moki-messages-lens {
+  flex: 1;
+  display: flex;
+  gap: var(--moki-space-12);
+  min-width: 0;
+  min-height: 0;
+}
+
+.moki-messages-list {
+  width: 377px;
+  flex: none;
+  min-height: 0;
+}
+
+.moki-messages-thread {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

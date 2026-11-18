@@ -1,0 +1,67 @@
+.moki-inspector {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-24);
+  min-height: 0;
+}
+
+.moki-inspector--collapsed {
+  width: 32px;
+  gap: 0;
+}
+
+.moki-ask-moki {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-12);
+  height: 36px;
+  flex: none;
+  padding: 0 var(--moki-space-12);
+  background: var(--moki-quiet-fill);
+  border-radius: var(--moki-radius-control);
+  color: var(--moki-color-muted);
+  box-sizing: border-box;
+}
+
+.moki-ask-moki-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  outline: none;
+  font-family: var(--moki-font);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--moki-color-ink);
+}
+
+.moki-ask-moki-input::placeholder {
+  color: var(--moki-color-muted);
+}
+
+.moki-inspector-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.moki-inspector-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  margin-top: auto;
+}
+
+.moki-inspector-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moki-inspector--collapsed .moki-inspector-footer {
+  justify-content: flex-end;
+}

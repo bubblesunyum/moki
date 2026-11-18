@@ -51,6 +51,9 @@
   /* Quiet fill: white at 6% — bubbles, inputs, chips */
   --moki-quiet-fill: rgba(255, 255, 255, 0.06);
 
+  /* Hairline divider: space-picker rule, lens-list dividers */
+  --moki-divider-line: rgba(255, 255, 255, 0.12);
+
   /* Shared selection ("Selection · lit", brief §1) */
   --moki-selection-fill:
     linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%),

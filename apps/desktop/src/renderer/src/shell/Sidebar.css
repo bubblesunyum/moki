@@ -1,0 +1,159 @@
+.moki-sidebar {
+  width: 153px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.moki-sidebar--collapsed {
+  width: 32px;
+}
+
+/* Collapsed drag strip: keeps the window draggable and holds the rail
+ * icons below the traffic lights (main process trafficLightPosition
+ * x20/y20). Same height as the expanded window-controls row. */
+.moki-rail-drag {
+  height: 44px;
+  flex: none;
+  -webkit-app-region: drag;
+}
+
+/* Top strip: native traffic lights overlay the left ~76px (main process
+ * trafficLightPosition x20/y20), so Back/Forward start after a gutter.
+ * This row is the Electron drag region; the buttons opt out. */
+.moki-window-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  padding-left: var(--moki-space-8);
+  margin-bottom: var(--moki-space-8);
+  -webkit-app-region: drag;
+}
+
+.moki-traffic-gutter {
+  width: 68px;
+  flex: none;
+}
+
+.moki-space-picker {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  width: 100%;
+  padding: 8px 4px;
+  border: none;
+  border-radius: var(--moki-radius-inset);
+  background: transparent;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  color: var(--moki-color-muted);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.moki-space-picker-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.moki-divider {
+  height: 16px;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.moki-divider::before {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--moki-divider-line);
+}
+
+.moki-lens-list {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--moki-space-8);
+}
+
+.moki-lens-row {
+  height: 32px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  padding: 0 var(--moki-space-8);
+  border: 1px solid transparent;
+  border-radius: var(--moki-radius-row);
+  background: transparent;
+  color: var(--moki-color-muted);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+/* Selected lens hugs its content instead of going full width. */
+.moki-lens-row.selected-lit {
+  align-self: flex-start;
+  width: auto;
+  padding-right: var(--moki-space-12);
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  box-shadow: var(--moki-selection-shadow);
+}
+
+.moki-lens-row:not(.selected-lit):hover {
+  background: var(--moki-quiet-fill);
+}
+
+.moki-lens-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moki-tabs-placeholder {
+  flex: 1;
+  min-height: 0;
+}
+
+.moki-new-tab {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  padding: 0 var(--moki-space-8);
+  border: none;
+  border-radius: var(--moki-radius-row);
+  background: transparent;
+  color: var(--moki-color-muted);
+  opacity: 0.81;
+  cursor: pointer;
+}
+
+.moki-sidebar-bottom {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--moki-space-8);
+}
+
+/* Collapsed rail: icon-only lens buttons, toggle pinned at the bottom. */
+.moki-lens-rail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--moki-space-4);
+  padding-top: var(--moki-space-8);
+}
+
+.moki-lens-rail .moki-lens-rail-active {
+  color: var(--moki-accent-cyan);
+}

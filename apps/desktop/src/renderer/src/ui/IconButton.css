@@ -14,11 +14,17 @@
   box-sizing: border-box;
 }
 
-.moki-icon-button:hover {
+.moki-icon-button--sm {
+  width: 32px;
+  height: 32px;
+}
+
+.moki-icon-button:not(:disabled):not([aria-disabled='true']):hover {
   background: var(--moki-quiet-fill);
 }
 
-.moki-icon-button:disabled {
+.moki-icon-button:disabled,
+.moki-icon-button[aria-disabled='true'] {
   opacity: 0.4;
   cursor: default;
 }

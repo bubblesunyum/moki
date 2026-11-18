@@ -43,6 +43,17 @@ describe('HelperStatus', () => {
     expect(el).not.toBeNull()
   })
 
+  it('shows a quiet no-bridge state when the preload is missing', async () => {
+    Reflect.deleteProperty(window, 'moki')
+    render(
+      <RpcProvider>
+        <HelperStatus />
+      </RpcProvider>
+    )
+    const el = await screen.findByText('helper no bridge')
+    expect(el).not.toBeNull()
+  })
+
   it('follows helper.status bridge events', async () => {
     let statusCb: ((params: { status: 'starting' | 'ok' | 'down' }) => void) | null = null
     Object.defineProperty(window, 'moki', {

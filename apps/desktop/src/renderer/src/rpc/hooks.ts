@@ -12,6 +12,7 @@ import type {
   RpcParams,
   RpcResult
 } from '../../../../../../packages/protocol/src/index'
+import { callBridge } from './bridge'
 
 type QueryKey = readonly unknown[]
 
@@ -23,7 +24,7 @@ export function useRpcQuery<M extends RpcMethod>(
 ): UseQueryResult<RpcResult<M>, RpcErrorShape> {
   return useQuery({
     queryKey: ['rpc', method, params ?? null],
-    queryFn: () => window.moki.call(method, params),
+    queryFn: () => callBridge(method, params),
     ...options
   })
 }
@@ -51,7 +52,7 @@ export function useRpcInfiniteQuery<M extends RpcMethod, TCursor = unknown>(
   return useInfiniteQuery({
     queryKey: ['rpc', method, params ?? null],
     queryFn: (ctx: QueryFunctionContext<QueryKey, TCursor>) =>
-      window.moki.call(method, { ...(params as object | undefined), cursor: ctx.pageParam } as never),
+      callBridge(method, { ...(params as object | undefined), cursor: ctx.pageParam } as never),
     initialPageParam,
     getNextPageParam,
     ...options
