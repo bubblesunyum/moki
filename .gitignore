@@ -1,0 +1,18 @@
+
+# The live dashboard port, rewritten on every bind — machine-local.
+.claude/launch.json
+
+# The dashboard snapshot, rewritten on every poll — machine-local.
+dashboard/state.json
+
+# Agent scratch — created here, removed when done, never committed.
+.tmp/
+
+# Codex agents generated from the shared prompts — scripts/harness link regenerates them.
+.codex/agents/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
