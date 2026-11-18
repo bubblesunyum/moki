@@ -21,9 +21,65 @@ export interface AccountsListResult {
   psymailImport: PsymailImportStatus
 }
 
+export interface EmailAddress {
+  name: string
+  address: string
+}
+
+export interface ThreadSummary {
+  id: string
+  account: string
+  from: EmailAddress
+  subject: string
+  snippet: string
+  /** ISO8601 date string (newest message in the thread). */
+  date: string
+  unread: boolean
+  messageCount: number
+  labelIds: string[]
+}
+
+export interface MailMessage {
+  id: string
+  from: EmailAddress
+  to: EmailAddress[]
+  cc: EmailAddress[]
+  /** ISO8601 date string. */
+  date: string
+  html?: string | null
+  text?: string | null
+  isFromMe: boolean
+}
+
+export interface ThreadDetail {
+  id: string
+  account: string
+  subject: string
+  messages: MailMessage[]
+}
+
+export interface MailListThreadsParams {
+  label: string
+  cursor?: Record<string, string>
+}
+
+export interface MailListThreadsResult {
+  threads: ThreadSummary[]
+  next?: Record<string, string>
+  unreachable: string[]
+  authExpired: string[]
+}
+
+export interface MailGetThreadParams {
+  account: string
+  id: string
+}
+
 export interface RpcMethodMap {
   'helper.ping': { params: void; result: { ok: boolean; version: string } }
   'accounts.list': { params: void; result: AccountsListResult }
+  'mail.listThreads': { params: MailListThreadsParams; result: MailListThreadsResult }
+  'mail.getThread': { params: MailGetThreadParams; result: ThreadDetail }
 }
 
 export type RpcMethod = keyof RpcMethodMap

@@ -289,6 +289,33 @@ public struct GoogleAccountsService: Sendable {
         self.shared = SharedGoogleServiceState(locations: locations, reader: psymailReader)
     }
 
+    /// Give the one-time psymail import its chance to merge before a direct
+    /// token mint (e.g. `MailService.getThread`, which never calls
+    /// `listAccounts`). Runs the same wait `listAccounts()` uses; later
+    /// calls reuse the single import's outcome.
+    public func ensureTokens() async {
+        _ = await shared.importer.wait(timeout: psymailImportTimeout)
+    }
+
+    /// Mint (or reuse a cached) access token for one account. Call
+    /// `listAccounts()` first so a pending psymail import has merged into
+    /// Moki's file; this reads only Moki's own token file and never touches
+    /// psymail paths. Unknown addresses surface as `auth_expired`.
+    public func accessToken(for address: String) async throws -> String {
+        guard
+            let refreshToken = GoogleTokenStore(locations: locations)
+                .readMokiTokens()[address]
+        else {
+            throw AppError(
+                code: "auth_expired",
+                message: "Google authorization expired. Sign in again to reconnect.")
+        }
+        let config = try OAuthClientConfig.load(
+            locations: locations, environment: environment)
+        return try await shared.tokenCache(config: config, session: session)
+            .accessToken(for: address, refreshToken: refreshToken)
+    }
+
     /// Every known Gmail account with its profile, plus the psymail-import
     /// signal. Answers from Moki's own token file when the one-time import
     /// is still pending; a late import merges/persists for the next call.

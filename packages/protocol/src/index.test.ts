@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   PROTOCOL_VERSION,
   isExternalHttpUrl,
+  type MailGetThreadParams,
+  type MailListThreadsParams,
+  type MailListThreadsResult,
   type RpcErrorShape,
-  type RpcMethodMap
+  type RpcMethodMap,
+  type ThreadDetail
 } from './index'
 
 describe('protocol', () => {
@@ -26,6 +30,61 @@ describe('protocol', () => {
       psymailImport: 'pending'
     }
     expect(result.accounts).toHaveLength(3)
+  })
+
+  it('types mail.listThreads', () => {
+    const params: MailListThreadsParams = { label: 'INBOX' }
+    const withCursor: MailListThreadsParams = {
+      label: 'psymail/commerce',
+      cursor: { 'a@example.com': 'token123' }
+    }
+    const result: MailListThreadsResult = {
+      threads: [
+        {
+          id: 't1',
+          account: 'a@example.com',
+          from: { name: 'Clayton Gibson', address: 'clayton@example.com' },
+          subject: 'Plant swap this weekend?',
+          snippet: 'Still good for Saturday?',
+          date: new Date().toISOString(),
+          unread: true,
+          messageCount: 1,
+          labelIds: ['INBOX', 'UNREAD']
+        }
+      ],
+      next: { 'a@example.com': 'token456' },
+      unreachable: [],
+      authExpired: ['b@example.com']
+    }
+    expect(params.label).toBe('INBOX')
+    expect(withCursor.cursor?.['a@example.com']).toBe('token123')
+    expect(result.threads).toHaveLength(1)
+    // Dates cross as ISO8601 strings, so they must round-trip.
+    expect(Number.isNaN(Date.parse(result.threads[0].date))).toBe(false)
+    expect(result.authExpired).toEqual(['b@example.com'])
+  })
+
+  it('types mail.getThread', () => {
+    const params: MailGetThreadParams = { account: 'a@example.com', id: 't1' }
+    const result: ThreadDetail = {
+      id: 't1',
+      account: 'a@example.com',
+      subject: 'Plant swap this weekend?',
+      messages: [
+        {
+          id: 'm1',
+          from: { name: 'Clayton Gibson', address: 'clayton@example.com' },
+          to: [{ name: 'Bubbles', address: 'a@example.com' }],
+          cc: [],
+          date: new Date().toISOString(),
+          html: '<a href="https://example.com/swap">RSVP here</a>',
+          text: 'Still good for Saturday?',
+          isFromMe: false
+        }
+      ]
+    }
+    expect(params.id).toBe('t1')
+    expect(result.messages[0].html).toContain('https://example.com/swap')
   })
 
   it('shapes RpcError with optional app code', () => {

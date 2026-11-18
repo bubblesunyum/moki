@@ -12,7 +12,18 @@ struct MokiHelper {
         let transport = StdioTransport()
         let server = RPCServer(transport: transport)
         await server.registerBuiltinMethods()
-        await server.register("accounts.list", handler: googleAccountsListHandler())
+        if ProcessInfo.processInfo.environment["MOKI_FIXTURES"] == "1" {
+            // Canned data: no network, no file access (UI work, screenshots).
+            await server.register("accounts.list", handler: fixtureAccountsListHandler())
+            await server.register("mail.listThreads", handler: fixtureMailListThreadsHandler())
+            await server.register("mail.getThread", handler: fixtureMailGetThreadHandler())
+        } else {
+            await server.register("accounts.list", handler: googleAccountsListHandler())
+            let mail = MailService(
+                accounts: GoogleAccountsService(), session: .shared)
+            await server.register("mail.listThreads", handler: mailListThreadsHandler(service: mail))
+            await server.register("mail.getThread", handler: mailGetThreadHandler(service: mail))
+        }
         await server.run()
     }
 }
