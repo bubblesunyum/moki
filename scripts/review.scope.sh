@@ -18,8 +18,8 @@
 # stays unreviewable — list such files by path. .gitignore is one: it decides
 # what gets committed, and an edit there once shipped inside a change whose
 # packet never listed it.
-SCOPE=('*.py' '*.sh' '*.md' '*.html' '*.json' 'scripts/hooks/*' '.gitignore'
-       ':(exclude).beads/*' ':(exclude)dashboard/vendor/*')
+SCOPE=('*.yaml' '*.txt' '*.ts' '*.tsx' '*.css' '*.swift' '*.py' '*.sh' '*.md' '*.html' '*.json' 'scripts/hooks/*' '.gitignore'
+       ':(exclude).beads/*' ':(exclude)pnpm-lock.yaml' ':(exclude)dashboard/vendor/*')
 
 # Screenshots the design reviewer looks at. Whatever drives your app should
 # write its captures to /tmp with this prefix — the ledger's, resolved above.

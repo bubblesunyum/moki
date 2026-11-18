@@ -16,10 +16,11 @@
 # `probe_step` instead — same contract, skipped in the --quick lane.
 # Nothing else in this file needs to change.
 
-step "build" false  # e.g. cargo build / npm run build / xcodebuild ... build
-
-probe_step "tests" false # e.g. cargo test / npm test / pytest -q — skipped in
-                         # the --quick lane with the throwaway-repo probes
+step "typecheck" pnpm -s typecheck
+step "test" pnpm -s test
+step "build" pnpm -s build
+step "helper-build" swift build --package-path helper
+step "helper-test" swift test --package-path helper
 
 # Test counts are the one detail worth surfacing on success — "ok" alone
 # can't distinguish a green suite from a suite that ran nothing. Point this

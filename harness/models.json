@@ -1,0 +1,26 @@
+{
+  "implement": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  },
+  "librarian": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  },
+  "reviewer-correctness": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  },
+  "reviewer-design": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  },
+  "reviewer-taste": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  },
+  "summarize": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "variant": "xhigh"
+  }
+}
