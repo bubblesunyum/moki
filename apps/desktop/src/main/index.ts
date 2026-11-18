@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
+import { captureWhenSettled } from './dev/capture'
 import { HelperProcess, resolveHelperBinary, setupHelperIpc } from './helper/index'
 
 let helper: HelperProcess | null = null
@@ -22,6 +23,8 @@ function createWindow(): void {
       sandbox: true
     }
   })
+
+  if (!app.isPackaged) captureWhenSettled(win, () => app.quit())
 
   win.once('ready-to-show', () => {
     win.show()
