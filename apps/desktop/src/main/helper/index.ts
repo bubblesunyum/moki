@@ -9,5 +9,13 @@ export type {
   WritableLike
 } from './helperProcess'
 export { LineBuffer } from './lineBuffer'
-export { helperBinaryFromRepoRoot, repoRootFromAppPath, resolveHelperBinary } from './binary'
+export {
+  HELPER_BINARY_NAME,
+  HELPER_RESOURCE_DIR,
+  helperBinaryFromRepoRoot,
+  helperBinaryFromResourcesPath,
+  repoRootFromAppPath,
+  resolveHelperBinary
+} from './binary'
+export type { HelperBinaryEnv } from './binary'
 export { setupHelperIpc } from './ipc'

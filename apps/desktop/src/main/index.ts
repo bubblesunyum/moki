@@ -39,7 +39,12 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
-  helper = new HelperProcess({ binaryPath: resolveHelperBinary(app.getAppPath()) })
+  helper = new HelperProcess({
+    binaryPath: resolveHelperBinary(app.getAppPath(), {
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath
+    })
+  })
   helper.start()
   setupHelperIpc(ipcMain, shell, helper, () => BrowserWindow.getAllWindows())
 

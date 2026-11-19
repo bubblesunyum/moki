@@ -6,6 +6,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "predev": "swift build --package-path ../../helper",
+    "build:helper": "swift build -c release --package-path ../../helper",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json"

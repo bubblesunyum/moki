@@ -1,0 +1,18 @@
+# electron-builder packaging config. Auto-discovered from the project root,
+# so apps/desktop/package.json stays free of builder keys.
+appId: com.moki.desktop
+productName: Moki
+directories:
+  output: dist
+files:
+  - out/**/*
+extraResources:
+  # Release binary built with: swift build -c release --package-path ../../helper
+  - from: ../../helper/.build/release
+    to: moki-helper
+    filter:
+      - moki-helper
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
