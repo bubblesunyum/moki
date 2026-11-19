@@ -4,7 +4,7 @@ import type {
   ThreadSummary
 } from '../../../../../../../packages/protocol/src/index'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RpcProvider } from '../../rpc/provider'
 import { formatListDate } from './formatListDate'
 import { useInboxThreads } from './hooks/useInboxThreads'
@@ -153,8 +153,13 @@ describe('ThreadList', () => {
     renderHarness()
 
     await screen.findByText('Subject t1')
-    const first = screen.getByRole('button', { name: /Sender t1/ })
-    expect(first.classList.contains('selected-lit')).toBe(true)
+    // Selection lands in a useEffect after the rows render, so await it
+    // instead of asserting synchronously (flaked in full-suite runs).
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Sender t1/ }).classList.contains('selected-lit')
+      ).toBe(true)
+    })
 
     fireEvent.click(screen.getByRole('button', { name: /Sender t2/ }))
     expect(screen.getByRole('button', { name: /Sender t2/ }).classList.contains('selected-lit')).toBe(
