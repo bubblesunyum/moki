@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import MokiHelperCore
+@testable import PsymailKit
 
 // MARK: - Stubs
 
@@ -240,6 +241,41 @@ private let mailClientEnv = [
     "MOKI_GOOGLE_CLIENT_SECRET": "s",
 ]
 
+// MARK: - Fake engine (list tests never touch the network)
+
+private final class FakeMailEngine: MailEngine, @unchecked Sendable {
+    var labelMaps: [String: [String: String]] = [:]
+    var labelMapErrors: [String: any Error] = [:]
+    var pageResult = EnginePage(rows: [], next: nil, unreachable: [], authExpired: [])
+    private(set) var pageCalls: [(tab: String, accounts: [PsymailAccount], cursor: [String: String]?)] =
+        []
+
+    func labelMap(for address: String) async throws -> [String: String] {
+        if let error = labelMapErrors[address] { throw error }
+        return labelMaps[address] ?? [:]
+    }
+
+    func page(tab: String, accounts: [PsymailAccount], cursor: [String: String]?) async
+        -> EnginePage
+    {
+        pageCalls.append((tab: tab, accounts: accounts, cursor: cursor))
+        return pageResult
+    }
+}
+
+private func makeEngineRow(
+    id: String, threadId: String, account: String, fromName: String,
+    fromAddress: String, subject: String, snippet: String,
+    epochSeconds: TimeInterval, unread: Bool, threadCount: Int,
+    labelIds: [String]
+) -> EngineThreadRow {
+    EngineThreadRow(
+        id: id, threadId: threadId, accountAddress: account,
+        fromName: fromName, fromAddress: fromAddress, subject: subject,
+        snippet: snippet, date: Date(timeIntervalSince1970: epochSeconds),
+        isUnread: unread, threadCount: threadCount, labelIds: labelIds)
+}
+
 @Suite(.serialized)
 struct MailTests {
     // MARK: - Header parsing
@@ -322,148 +358,209 @@ struct MailTests {
 
     // MARK: - Gmail client over stubbed HTTP
 
+    // MARK: - listThreads through the engine seam
+
+    /// Build a `MailService` whose list path runs on `fake`: `listAccounts`
+    /// still runs against the stub session (token refresh + userinfo), so
+    /// statuses come from the same place production reads them.
+    private func makeEngineService(home: URL, fake: FakeMailEngine) -> MailService {
+        let locations = GoogleLocations(homeDirectoryURL: home)
+        let session = makeMailStubSession()
+        return MailService(
+            accounts: GoogleAccountsService(
+                locations: locations, environment: mailClientEnv, session: session),
+            gmail: GmailClient(session: session) { _ in "token" },
+            engine: fake)
+    }
+
     @Test func listThreadsMergesNewestFirst() async throws {
         let (home, scratch) = try makeTempMailHome()
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let locations = GoogleLocations(homeDirectoryURL: home)
         try writeMailTokens(
-            ["a@example.com": "ra", "b@example.com": "rb"], to: locations.mokiTokensURL)
+            ["a@example.com": "ra", "b@example.com": "rb"],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
 
-        let seeds: [String: [MailSeed]] = [
-            "a@example.com": [
-                MailSeed(
-                    id: "t-a1", from: "Ana <ana@x.com>", subject: "Middle",
-                    date: "Mon, 17 Nov 2025 10:00:00 +0000", snippet: "mid",
-                    labelIds: ["INBOX", "UNREAD"], internalMs: "1763373600000"),
-                MailSeed(
-                    id: "t-a2", from: "Zed <zed@x.com>",
-                    subject: "=?UTF-8?Q?Caf=C3=A9_plans?=",
-                    date: "Sun, 16 Nov 2025 10:00:00 +0000", snippet: "old",
-                    labelIds: ["INBOX"], internalMs: "1763287200000"),
-            ],
-            "b@example.com": [
-                MailSeed(
-                    id: "t-b1", from: "Bo <bo@x.com>", subject: "Newest",
-                    date: "Mon, 17 Nov 2025 12:00:00 +0000", snippet: "new",
-                    labelIds: ["INBOX"], internalMs: "1763380800000")
-            ],
-        ]
         let log = MailRequestLog()
-        installMailStub(
-            log: log, seeds: seeds,
-            listTokens: ["a@example.com": "tok-a", "b@example.com": "tok-b"])
+        installMailStub(log: log, seeds: [:])
         defer { MailStubURLProtocol.clear() }
 
-        let service = MailService(
-            accounts: GoogleAccountsService(
-                locations: locations, environment: mailClientEnv,
-                session: makeMailStubSession()),
-            session: makeMailStubSession())
+        let fake = FakeMailEngine()
+        fake.labelMaps = [
+            "a@example.com": ["INBOX": "I1"],
+            "b@example.com": ["INBOX": "I2"],
+        ]
+        // Deliberately unordered: the service merges newest-first.
+        fake.pageResult = EnginePage(
+            rows: [
+                makeEngineRow(
+                    id: "m-a1", threadId: "t-a1", account: "a@example.com",
+                    fromName: "Ana", fromAddress: "ana@x.com", subject: "Middle",
+                    snippet: "mid", epochSeconds: 1_763_373_600, unread: true,
+                    threadCount: 2, labelIds: ["INBOX", "UNREAD"]),
+                makeEngineRow(
+                    id: "m-a2", threadId: "t-a2", account: "a@example.com",
+                    fromName: "Zed", fromAddress: "zed@x.com", subject: "Old",
+                    snippet: "old", epochSeconds: 1_763_287_200, unread: false,
+                    threadCount: 1, labelIds: ["INBOX"]),
+                makeEngineRow(
+                    id: "m-b1", threadId: "t-b1", account: "b@example.com",
+                    fromName: "Bo", fromAddress: "bo@x.com", subject: "Newest",
+                    snippet: "new", epochSeconds: 1_763_380_800, unread: false,
+                    threadCount: 3, labelIds: ["INBOX"]),
+            ],
+            next: ["a@example.com": "tok-a", "b@example.com": "tok-b"],
+            unreachable: [], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
         let page = try await service.listThreads(label: "INBOX")
+
+        // One engine call for the inbox tab, across both ok accounts.
+        #expect(fake.pageCalls.count == 1)
+        #expect(fake.pageCalls.first?.tab == "inbox")
+        #expect(fake.pageCalls.first?.accounts.map(\.address).sorted()
+            == ["a@example.com", "b@example.com"])
+        #expect(fake.pageCalls.first?.cursor == nil)
 
         #expect(page.threads.map(\.id) == ["t-b1", "t-a1", "t-a2"])
         #expect(page.next == ["a@example.com": "tok-a", "b@example.com": "tok-b"])
         #expect(page.unreachable.isEmpty)
         #expect(page.authExpired.isEmpty)
 
+        // The row id is the thread id, not the message id.
         let newest = try #require(page.threads.first)
         #expect(newest.account == "b@example.com")
         #expect(newest.from == EmailAddress(name: "Bo", address: "bo@x.com"))
         #expect(newest.subject == "Newest")
-        #expect(newest.messageCount == 1)
+        #expect(newest.snippet == "new")
+        #expect(newest.messageCount == 3)
         #expect(!newest.unread)
+        #expect(newest.date == "2025-11-17T12:00:00Z")
 
         let middle = page.threads[1]
         #expect(middle.unread)
         #expect(middle.labelIds.contains("UNREAD"))
 
-        // RFC2047 subject decoded on the oldest row.
-        #expect(page.threads[2].subject == "Café plans")
-
-        // INBOX resolves without a labels.list round-trip.
-        #expect(log.urls(containing: "/labels").isEmpty)
+        // The list path never touches the Gmail API directly.
+        #expect(log.urls(containing: "gmail.googleapis.com").isEmpty)
     }
 
-    @Test func cursorPagingDropsExhaustedAccounts() async throws {
+    @Test func cursorPagingPassesCursorThrough() async throws {
         let (home, scratch) = try makeTempMailHome()
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let locations = GoogleLocations(homeDirectoryURL: home)
-        try writeMailTokens(["a@example.com": "ra"], to: locations.mokiTokensURL)
+        try writeMailTokens(
+            ["a@example.com": "ra"],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
 
-        let seeds: [String: [MailSeed]] = [
-            "a@example.com": [
-                MailSeed(
-                    id: "t-a1", from: "Ana <ana@x.com>", subject: "One",
-                    date: "Mon, 17 Nov 2025 10:00:00 +0000", snippet: "one",
-                    labelIds: ["INBOX"], internalMs: "1763373600000")
-            ]
-        ]
         let log = MailRequestLog()
-        installMailStub(log: log, seeds: seeds, listTokens: ["a@example.com": "tok-a"])
+        installMailStub(log: log, seeds: [:])
         defer { MailStubURLProtocol.clear() }
 
-        let service = MailService(
-            accounts: GoogleAccountsService(
-                locations: locations, environment: mailClientEnv,
-                session: makeMailStubSession()),
-            session: makeMailStubSession())
-        let first = try await service.listThreads(label: "INBOX")
-        #expect(first.threads.map(\.id) == ["t-a1"])
-        #expect(first.next == ["a@example.com": "tok-a"])
-
-        // Second page: stub returns no ids and no token past the cursor.
-        let second = try await service.listThreads(
-            label: "INBOX", cursor: first.next)
-        #expect(second.threads.isEmpty)
-        #expect(second.next == nil)
-        #expect(log.urls(containing: "pageToken=tok-a").count == 1)
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["INBOX": "I1"]]
+        fake.pageResult = EnginePage(rows: [], next: nil, unreachable: [], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
+        let page = try await service.listThreads(
+            label: "INBOX", cursor: ["a@example.com": "tok-a"])
+        #expect(page.threads.isEmpty)
+        #expect(page.next == nil)
+        #expect(fake.pageCalls.count == 1)
+        #expect(fake.pageCalls.first?.cursor == ["a@example.com": "tok-a"])
     }
 
-    @Test func bundleLabelResolvesAndCaches() async throws {
+    @Test func emptyDictCursorListsFirstPage() async throws {
         let (home, scratch) = try makeTempMailHome()
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let locations = GoogleLocations(homeDirectoryURL: home)
-        try writeMailTokens(["a@example.com": "ra"], to: locations.mokiTokensURL)
+        try writeMailTokens(
+            ["a@example.com": "ra"],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
 
         let log = MailRequestLog()
-        installMailStub(
-            log: log,
-            seeds: ["a@example.com": []],
-            labels: [["id": "Label_7", "name": "psymail/commerce"]])
+        installMailStub(log: log, seeds: [:])
         defer { MailStubURLProtocol.clear() }
 
-        let service = MailService(
-            accounts: GoogleAccountsService(
-                locations: locations, environment: mailClientEnv,
-                session: makeMailStubSession()),
-            session: makeMailStubSession())
-        let first = try await service.listThreads(label: "psymail/commerce")
-        let second = try await service.listThreads(label: "psymail/commerce")
-        #expect(first.threads.isEmpty)
-        #expect(second.threads.isEmpty)
-        // One labels.list lookup total: the id is cached per account.
-        #expect(log.urls(containing: "/labels").count == 1)
-        // The resolved id travels as labelIds on the threads.list call.
-        #expect(log.urls(containing: "labelIds=Label_7").count == 2)
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["INBOX": "I1"]]
+        // An empty dict is a first page, not a continuation: the engine
+        // skips accounts missing from a non-nil cursor, so passing `{}`
+        // through would list nothing.
+        fake.pageResult = EnginePage(
+            rows: [
+                makeEngineRow(
+                    id: "m-a1", threadId: "t-a1", account: "a@example.com",
+                    fromName: "Ana", fromAddress: "ana@x.com", subject: "Hi",
+                    snippet: "hi", epochSeconds: 1_763_373_600, unread: false,
+                    threadCount: 1, labelIds: ["INBOX"])
+            ],
+            next: ["a@example.com": "tok-a"], unreachable: [], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
+        let page = try await service.listThreads(label: "INBOX", cursor: [:])
+        #expect(page.threads.map(\.id) == ["t-a1"])
+        #expect(page.next == ["a@example.com": "tok-a"])
+        #expect(fake.pageCalls.count == 1)
+        #expect(fake.pageCalls.first?.cursor == nil)
+        #expect(log.urls(containing: "gmail.googleapis.com").isEmpty)
+    }
+
+    @Test func bundleLabelSelectsTabRemainder() async throws {
+        let (home, scratch) = try makeTempMailHome()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try writeMailTokens(
+            ["a@example.com": "ra"],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
+
+        let log = MailRequestLog()
+        installMailStub(log: log, seeds: [:])
+        defer { MailStubURLProtocol.clear() }
+
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["psymail/commerce": "Label_7"]]
+        let service = makeEngineService(home: home, fake: fake)
+        let page = try await service.listThreads(label: "psymail/commerce")
+        #expect(page.threads.isEmpty)
+        #expect(fake.pageCalls.count == 1)
+        #expect(fake.pageCalls.first?.tab == "commerce")
+        #expect(log.urls(containing: "gmail.googleapis.com").isEmpty)
+    }
+
+    @Test func unknownLabelListsNothingWithoutEngineCall() async throws {
+        let (home, scratch) = try makeTempMailHome()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try writeMailTokens(
+            ["a@example.com": "ra"],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
+
+        let log = MailRequestLog()
+        installMailStub(log: log, seeds: [:])
+        defer { MailStubURLProtocol.clear() }
+
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["INBOX": "I1"]]
+        // A well-formed but unserved bundle reaches the engine, which
+        // answers empty; a malformed label never reaches it at all.
+        fake.pageResult = EnginePage(rows: [], next: nil, unreachable: [], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
+        let bundle = try await service.listThreads(label: "psymail/nope")
+        #expect(bundle.threads.isEmpty)
+        #expect(bundle.next == nil)
+        #expect(bundle.unreachable.isEmpty)
+        #expect(bundle.authExpired.isEmpty)
+        #expect(fake.pageCalls.count == 1)
+        #expect(fake.pageCalls.first?.tab == "nope")
+
+        let malformed = try await service.listThreads(label: "NOT-A-LABEL")
+        #expect(malformed.threads.isEmpty)
+        #expect(malformed.next == nil)
+        #expect(fake.pageCalls.count == 1)
+        #expect(log.urls(containing: "gmail.googleapis.com").isEmpty)
     }
 
     @Test func accountFailuresAreReportedNotSilent() async throws {
         let (home, scratch) = try makeTempMailHome()
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let locations = GoogleLocations(homeDirectoryURL: home)
         try writeMailTokens(
             ["a@example.com": "ra", "bad@example.com": "rbad", "gone@example.com": "rgone"],
-            to: locations.mokiTokensURL)
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
 
-        let seeds: [String: [MailSeed]] = [
-            "a@example.com": [
-                MailSeed(
-                    id: "t-a1", from: "Ana <ana@x.com>", subject: "Hi",
-                    date: "Mon, 17 Nov 2025 10:00:00 +0000", snippet: "hi",
-                    labelIds: ["INBOX"], internalMs: "1763373600000")
-            ]
-        ]
-        // bad: threads.list 500s; gone: refresh dies with invalid_grant.
+        // gone: refresh dies with invalid_grant; bad: refresh 500s.
         MailStubURLProtocol.setHandler { request in
             let url = request.url!.absoluteString
             if url == "https://oauth2.googleapis.com/token" {
@@ -473,6 +570,9 @@ struct MailTests {
                         mailHTTPResponse(url: request.url!, status: 400),
                         mailJSONData(["error": "invalid_grant"])
                     )
+                }
+                if body.contains("refresh_token=rbad") {
+                    return (mailHTTPResponse(url: request.url!, status: 500), Data())
                 }
                 return (
                     mailHTTPResponse(url: request.url!, status: 200),
@@ -485,34 +585,59 @@ struct MailTests {
                     mailJSONData([:])
                 )
             }
-            if url.contains("bad@example.com") && url.contains("/threads") {
-                return (mailHTTPResponse(url: request.url!, status: 500), Data())
-            }
-            if url.contains("/threads/") {
-                return (
-                    mailHTTPResponse(url: request.url!, status: 200),
-                    mailJSONData(metadataJSON(seeds["a@example.com"]![0]))
-                )
-            }
-            if url.contains("/threads") {
-                return (
-                    mailHTTPResponse(url: request.url!, status: 200),
-                    mailJSONData(["threads": [["id": "t-a1"]]])
-                )
-            }
             return (mailHTTPResponse(url: request.url!, status: 500), Data())
         }
         defer { MailStubURLProtocol.clear() }
 
-        let service = MailService(
-            accounts: GoogleAccountsService(
-                locations: locations, environment: mailClientEnv,
-                session: makeMailStubSession()),
-            session: makeMailStubSession())
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["INBOX": "I1"]]
+        fake.pageResult = EnginePage(
+            rows: [
+                makeEngineRow(
+                    id: "m-a1", threadId: "t-a1", account: "a@example.com",
+                    fromName: "Ana", fromAddress: "ana@x.com", subject: "Hi",
+                    snippet: "hi", epochSeconds: 1_763_373_600, unread: false,
+                    threadCount: 1, labelIds: ["INBOX"])
+            ],
+            next: nil,
+            unreachable: ["engine-bad@example.com"], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
         let page = try await service.listThreads(label: "INBOX")
         #expect(page.threads.map(\.id) == ["t-a1"])
-        #expect(page.unreachable == ["bad@example.com"])
+        // The dead account never reaches the engine.
+        #expect(fake.pageCalls.first?.accounts.map(\.address) == ["a@example.com"])
+        #expect(page.unreachable == ["bad@example.com", "engine-bad@example.com"])
         #expect(page.authExpired == ["gone@example.com"])
+    }
+
+    @Test func labelMapFailuresMarkAccounts() async throws {
+        let (home, scratch) = try makeTempMailHome()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try writeMailTokens(
+            [
+                "a@example.com": "ra", "b@example.com": "rb",
+                "c@example.com": "rc",
+            ],
+            to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
+
+        let log = MailRequestLog()
+        installMailStub(log: log, seeds: [:])
+        defer { MailStubURLProtocol.clear() }
+
+        let fake = FakeMailEngine()
+        fake.labelMaps = ["a@example.com": ["INBOX": "I1"]]
+        fake.labelMapErrors = [
+            "b@example.com": AppError(
+                code: "auth_expired", message: "Google authorization expired."),
+            "c@example.com": URLError(.notConnectedToInternet),
+        ]
+        fake.pageResult = EnginePage(rows: [], next: nil, unreachable: [], authExpired: [])
+        let service = makeEngineService(home: home, fake: fake)
+        let page = try await service.listThreads(label: "INBOX")
+        #expect(page.threads.isEmpty)
+        #expect(fake.pageCalls.first?.accounts.map(\.address) == ["a@example.com"])
+        #expect(page.authExpired == ["b@example.com"])
+        #expect(page.unreachable == ["c@example.com"])
     }
 
     @Test func getThreadDecodesHTMLBody() async throws {
@@ -595,33 +720,16 @@ struct MailTests {
         await #expect(throws: InvalidParamsError.self) {
             try await client.fetchDetail(account: "a@example.com", id: "t\u{01}1")
         }
-        await #expect(throws: InvalidParamsError.self) {
-            _ = try await client.listThreadIDs(
-                account: "a\u{01}@example.com", labelID: "INBOX", pageToken: nil)
-        }
-        await #expect(throws: InvalidParamsError.self) {
-            _ = try await client.threadSummary(account: "a@example.com", id: "t\u{01}1")
-        }
     }
 
-    @Test func pathSegmentsArePercentEncoded() async throws {
-        let log = MailRequestLog()
-        MailStubURLProtocol.setHandler { request in
-            log.append(request)
-            return (
-                mailHTTPResponse(url: request.url!, status: 200),
-                mailJSONData(["threads": []] as [String: Any])
-            )
-        }
-        defer { MailStubURLProtocol.clear() }
-        let client = GmailClient(session: makeMailStubSession()) { _ in "token" }
-        // A space and & in a label id must travel encoded, not split the URL.
-        _ = try await client.listThreadIDs(
-            account: "a@example.com", labelID: "A B&C", pageToken: nil)
-        let urls = log.all.compactMap { $0.url?.absoluteString }
-        #expect(urls.count == 1)
-        #expect(urls[0].contains("labelIds=A%20B%26C"))
-        #expect(urls[0].hasPrefix("https://gmail.googleapis.com/gmail/v1/users/"))
+    @Test func pathSegmentsArePercentEncoded() throws {
+        // A space and & in a query value travel encoded, not split the URL.
+        let url = try gmailURL(
+            account: "a@example.com", path: "threads",
+            query: [URLQueryItem(name: "labelIds", value: "A B&C")])
+        let absolute = url.absoluteString
+        #expect(absolute.contains("labelIds=A%20B%26C"))
+        #expect(absolute.hasPrefix("https://gmail.googleapis.com/gmail/v1/users/"))
     }
 
     // MARK: - Malformed 200 responses
@@ -708,49 +816,6 @@ struct MailTests {
             session: makeMailStubSession())
     }
 
-    @Test func malformedThreadsListSurfacesUnreachable() async throws {
-        let (home, scratch) = try makeTempMailHome()
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try writeMailTokens(
-            ["a@example.com": "ra"], to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
-        let log = MailRequestLog()
-        installGarbageStub(log: log, garbageInList: true, seed: garbageSeed())
-        defer { MailStubURLProtocol.clear() }
-        let page = try await makeGarbageService(home: home).listThreads(label: "INBOX")
-        #expect(page.threads.isEmpty)
-        #expect(page.unreachable == ["a@example.com"])
-        #expect(page.authExpired.isEmpty)
-    }
-
-    @Test func malformedLabelsListSurfacesUnreachable() async throws {
-        let (home, scratch) = try makeTempMailHome()
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try writeMailTokens(
-            ["a@example.com": "ra"], to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
-        let log = MailRequestLog()
-        installGarbageStub(log: log, garbageInLabels: true, seed: garbageSeed())
-        defer { MailStubURLProtocol.clear() }
-        let page = try await makeGarbageService(home: home)
-            .listThreads(label: "psymail/commerce")
-        #expect(page.threads.isEmpty)
-        #expect(page.unreachable == ["a@example.com"])
-        #expect(page.authExpired.isEmpty)
-    }
-
-    @Test func malformedThreadGetSurfacesUnreachableInList() async throws {
-        let (home, scratch) = try makeTempMailHome()
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try writeMailTokens(
-            ["a@example.com": "ra"], to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
-        let log = MailRequestLog()
-        installGarbageStub(log: log, garbageInGet: true, seed: garbageSeed())
-        defer { MailStubURLProtocol.clear() }
-        let page = try await makeGarbageService(home: home).listThreads(label: "INBOX")
-        #expect(page.threads.isEmpty)
-        #expect(page.unreachable == ["a@example.com"])
-        #expect(page.authExpired.isEmpty)
-    }
-
     @Test func malformedGetThreadThrowsUnreachable() async throws {
         let (home, scratch) = try makeTempMailHome()
         defer { try? FileManager.default.removeItem(at: scratch) }
@@ -766,24 +831,6 @@ struct MailTests {
         } catch let error as AppError {
             #expect(error.code == "unreachable")
         }
-    }
-
-    @Test func missingLabelStaysZeroRowSkip() async throws {
-        let (home, scratch) = try makeTempMailHome()
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try writeMailTokens(
-            ["a@example.com": "ra"], to: GoogleLocations(homeDirectoryURL: home).mokiTokensURL)
-        // Valid labels list, but without the requested bundle name.
-        let log = MailRequestLog()
-        installGarbageStub(log: log, seed: garbageSeed())
-        defer { MailStubURLProtocol.clear() }
-        let page = try await makeGarbageService(home: home)
-            .listThreads(label: "psymail/nope")
-        #expect(page.threads.isEmpty)
-        #expect(page.unreachable.isEmpty)
-        #expect(page.authExpired.isEmpty)
-        // The unknown label short-circuits before any threads.list call.
-        #expect(log.urls(containing: "/threads?").isEmpty)
     }
 
     // MARK: - psymail import before getThread

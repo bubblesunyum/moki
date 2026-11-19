@@ -2,28 +2,21 @@ import Foundation
 
 // MARK: - Gmail REST client
 //
-// Thin wrapper over the Gmail API used by `MailService`:
-// - `users.labels.list` resolves bundle names (`psymail/<name>`) to label
-//   ids per account, cached for the client's lifetime (`INBOX` is a system
-//   label and needs no lookup).
-// - `users.threads.list?labelIds=..&maxResults=30&pageToken=..` pages ids.
-// - `users.threads.get?format=metadata` builds list rows (From/Subject/Date
-//   headers + snippet + labelIds), fetched with bounded concurrency 8.
+// Thin wrapper over the Gmail API used for thread detail:
 // - `users.threads.get?format=full` builds thread detail (html>plain bodies,
 //   base64url-decoded with charset handling).
 //
+// Listing goes through the mail engine seam (`EngineSeam.swift`), not
+// through this client.
+//
 // Header/address parsing, RFC2047, date parsing, the MIME walk, and
 // base64url/charset decoding live in `MailParsing.swift`; this file keeps
-// requests, wire shapes, and row building.
-
-private let mailConcurrency = 8
+// requests, wire shapes, and detail-row building.
 
 public actor GmailClient {
     private let session: URLSession
     private let tokenProvider: @Sendable (String) async throws -> String
     private let maxResults: Int
-    /// "account\nlabel name" -> label id.
-    private var labelCache: [String: String] = [:]
 
     public init(
         session: URLSession = .shared,
@@ -63,107 +56,6 @@ public actor GmailClient {
         return (data, http.statusCode)
     }
 
-    // MARK: - Labels
-
-    /// Resolve a label name to a Gmail label id. System label `INBOX`
-    /// returns directly; bundle names (`psymail/<name>`) are looked up via
-    /// `users.labels.list` and cached per account. Throws
-    /// `InvalidParamsError` when the account has no such label, and
-    /// `AppError(unreachable)` when a 200 response won't decode (a sick
-    /// proxy or API change, not an empty label list).
-    public func resolveLabelID(label: String, account: String) async throws -> String {
-        if label.caseInsensitiveCompare("INBOX") == .orderedSame { return "INBOX" }
-        let key = account + "\n" + label
-        if let cached = labelCache[key] { return cached }
-        let (data, status) = try await request(account: account, path: "labels", query: [])
-        guard status == 200 else { throw gmailStatusError(status: status, account: account) }
-        guard let listed = try? JSONDecoder().decode(GmailLabelList.self, from: data) else {
-            throw AppError(
-                code: "unreachable", message: "Gmail returned an unexpected response.")
-        }
-        guard let match = listed.labels?.first(where: { $0.name == label }) else {
-            throw InvalidParamsError("Unknown Gmail label: \(label)")
-        }
-        labelCache[key] = match.id
-        return match.id
-    }
-
-    // MARK: - Thread lists
-
-    public func listThreadIDs(
-        account: String, labelID: String, pageToken: String?
-    ) async throws -> (ids: [String], nextPageToken: String?) {
-        var query = [
-            URLQueryItem(name: "labelIds", value: labelID),
-            URLQueryItem(name: "maxResults", value: String(maxResults)),
-        ]
-        if let pageToken, !pageToken.isEmpty {
-            query.append(URLQueryItem(name: "pageToken", value: pageToken))
-        }
-        let (data, status) = try await request(account: account, path: "threads", query: query)
-        guard status == 200 else { throw gmailStatusError(status: status, account: account) }
-        guard let listed = try? JSONDecoder().decode(GmailThreadList.self, from: data) else {
-            throw AppError(
-                code: "unreachable", message: "Gmail returned an unexpected response.")
-        }
-        return (listed.threads?.map(\.id) ?? [], listed.nextPageToken)
-    }
-
-    // MARK: - Summaries (metadata)
-
-    /// Fetch one list row. Never returns nil: threads without messages
-    /// degrade to a placeholder row so counts stay predictable.
-    public func threadSummary(account: String, id: String) async throws -> ThreadSummary {
-        let query = [
-            URLQueryItem(name: "format", value: "metadata"),
-            URLQueryItem(name: "metadataHeaders", value: "From"),
-            URLQueryItem(name: "metadataHeaders", value: "Subject"),
-            URLQueryItem(name: "metadataHeaders", value: "Date"),
-        ]
-        let (data, status) = try await request(
-            account: account, path: "threads/\(id)", query: query)
-        guard status == 200 else { throw gmailStatusError(status: status, account: account) }
-        guard let thread = try? JSONDecoder().decode(GmailThread.self, from: data) else {
-            throw AppError(code: "unreachable", message: "Gmail returned an unexpected response.")
-        }
-        return summarize(thread: thread, account: account)
-    }
-
-    /// Fetch metadata rows with bounded concurrency (`mailConcurrency`
-    /// in flight). A single thread's `AppError` (auth/reachability) fails
-    /// the batch so the account is reported, not silently partial; any
-    /// other per-thread failure skips just that thread.
-    public func fetchSummaries(account: String, ids: [String]) async throws -> [ThreadSummary] {
-        var out: [ThreadSummary] = []
-        var index = 0
-        while index < ids.count {
-            let chunk = Array(ids[index..<min(index + mailConcurrency, ids.count)])
-            let rows = try await withThrowingTaskGroup(
-                of: ThreadSummary?.self, returning: [ThreadSummary].self
-            ) { group in
-                for id in chunk {
-                    group.addTask {
-                        do {
-                            return try await self.threadSummary(account: account, id: id)
-                        } catch let error as AppError {
-                            throw error
-                        } catch {
-                            return nil
-                        }
-                    }
-                }
-                var collected: [ThreadSummary] = []
-                for try await row in group {
-                    if let row { collected.append(row) }
-                }
-                return collected
-            }
-            out.append(contentsOf: rows)
-            index += chunk.count
-        }
-        return out
-    }
-
     // MARK: - Detail (full)
 
     public func fetchDetail(account: String, id: String) async throws -> ThreadDetail {
@@ -183,22 +75,7 @@ public actor GmailClient {
             messages: messages.map { detailMessage($0, account: account) })
     }
 
-    // MARK: - Row building
-
-    private func summarize(thread: GmailThread, account: String) -> ThreadSummary {
-        let messages = thread.messages ?? []
-        let first = messages.first
-        let headers = headerMap(first?.payload?.headers)
-        let from = parseEmailAddress(headers["from"] ?? "")
-        let subject = nonEmpty(decodeRFC2047(headers["subject"] ?? "")) ?? "(No subject)"
-        let date = latestDate(messages: messages, headers: headers)
-        let labelIds = unionLabelIds(messages: messages)
-        let unread = labelIds.contains("UNREAD")
-        return ThreadSummary(
-            id: thread.id, account: account, from: from, subject: subject,
-            snippet: thread.snippet ?? "", date: iso8601String(date),
-            unread: unread, messageCount: max(messages.count, 1), labelIds: labelIds)
-    }
+    // MARK: - Detail rows
 
     private func detailMessage(_ message: GmailMessage, account: String) -> MailMessage {
         let headers = headerMap(message.payload?.headers)
@@ -217,24 +94,6 @@ public actor GmailClient {
 }
 
 // MARK: - Gmail wire shapes
-
-struct GmailLabelInfo: Decodable {
-    var id: String
-    var name: String
-}
-
-struct GmailLabelList: Decodable {
-    var labels: [GmailLabelInfo]?
-}
-
-struct GmailThreadRef: Decodable {
-    var id: String
-}
-
-struct GmailThreadList: Decodable {
-    var threads: [GmailThreadRef]?
-    var nextPageToken: String?
-}
 
 struct GmailHeader: Decodable {
     var name: String

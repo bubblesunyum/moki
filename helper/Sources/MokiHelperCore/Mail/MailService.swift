@@ -1,16 +1,20 @@
 import Foundation
+import PsymailKit
 
 // MARK: - Merged mail service
 //
-// One `listThreads` call fans out to every signed-in account and merges
-// the rows newest-first; one `getThread` call fetches a single thread's
-// full messages. Per-account failures never fail the page — they land in
-// `unreachable`/`authExpired` — while a missing OAuth client
-// (`auth_unconfigured`) still throws.
+// `listThreads` lists through the mail engine seam (`EngineSeam.swift`):
+// one `page` call across every signed-in account, threads collapsed and
+// merged newest-first. `getThread` still fetches full detail over the
+// Gmail API (`fetchDetail` + `MailParsing`), which is where subject/to/cc
+// bodies the engine's rows don't carry come from. Per-account failures
+// never fail the page — they land in `unreachable`/`authExpired` — while
+// a missing OAuth client (`auth_unconfigured`) still throws.
 
 public struct MailService: Sendable {
     public var accounts: GoogleAccountsService
     public var gmail: GmailClient
+    private let engine: any MailEngine
 
     public init(accounts: GoogleAccountsService, session: URLSession = .shared) {
         self.accounts = accounts
@@ -18,6 +22,19 @@ public struct MailService: Sendable {
         self.gmail = GmailClient(session: session) { address in
             try await service.accessToken(for: address)
         }
+        // One shared engine per service: its emitted-thread tracking is
+        // per tab, and a fresh engine per listing would re-emit threads
+        // across pages.
+        self.engine = PsymailMailEngine(token: { address in
+            try await service.accessToken(for: address)
+        })
+    }
+
+    /// Test seam: inject a fake engine (and Gmail client for detail tests).
+    init(accounts: GoogleAccountsService, gmail: GmailClient, engine: any MailEngine) {
+        self.accounts = accounts
+        self.gmail = gmail
+        self.engine = engine
     }
 
     /// List threads for `label` (`INBOX`, or `psymail/<name>` bundles)
@@ -36,36 +53,43 @@ public struct MailService: Sendable {
             case .unreachable: unreachable.append(account.address)
             }
         }
-        var threads: [ThreadSummary] = []
-        var next: [String: String] = [:]
-        if !ok.isEmpty {
-            let gmail = gmail
-            let results = await withTaskGroup(
-                of: AccountThreads.self, returning: [AccountThreads].self
-            ) { group in
-                for address in ok {
-                    group.addTask {
-                        await fetchThreads(
-                            gmail: gmail, label: label, account: address,
-                            pageToken: cursor?[address])
-                    }
-                }
-                var out: [AccountThreads] = []
-                for await result in group { out.append(result) }
-                return out
-            }
-            for result in results {
-                switch result.outcome {
-                case .ok(let rows, let token):
-                    threads.append(contentsOf: rows)
-                    if let token { next[result.account] = token }
-                case .authExpired:
-                    authExpired.append(result.account)
-                case .unreachable:
-                    unreachable.append(result.account)
-                }
+        // Unknown labels (anything but INBOX / psymail/<name>) list
+        // nothing — the old Gmail path swallowed its unknown-label error
+        // the same way.
+        guard let tab = mailTab(for: label) else {
+            return MailPage(
+                threads: [], next: nil,
+                unreachable: unreachable.sorted(), authExpired: authExpired.sorted())
+        }
+        // Per-account label maps through the engine. A dead grant lands
+        // the account in `authExpired`; anything else transient lands it
+        // in `unreachable`.
+        var engineAccounts: [PsymailAccount] = []
+        for address in ok {
+            do {
+                let map = try await engine.labelMap(for: address)
+                engineAccounts.append(PsymailAccount(address: address, labelMap: map))
+            } catch let error as AppError where error.code == "auth_expired" {
+                authExpired.append(address)
+            } catch {
+                unreachable.append(address)
             }
         }
+        guard !engineAccounts.isEmpty else {
+            return MailPage(
+                threads: [], next: nil,
+                unreachable: unreachable.sorted(), authExpired: authExpired.sorted())
+        }
+        // A non-nil but empty cursor is a first page, not a continuation:
+        // the engine skips accounts missing from a non-nil cursor
+        // (GmailSource.merge), so `{}` would skip every listed account and
+        // return an empty first page. The old path read each account's
+        // token as `cursor?[address]` (missing key = first page), which this
+        // restores. A non-empty cursor keeps its continuation meaning:
+        // accounts it omits are exhausted, not restarted.
+        let effectiveCursor = (cursor?.isEmpty == true) ? nil : cursor
+        let page = await engine.page(tab: tab, accounts: engineAccounts, cursor: effectiveCursor)
+        var threads = page.rows.map(threadSummary(from:))
         threads.sort {
             let left = mailSortDate($0.date)
             let right = mailSortDate($1.date)
@@ -73,8 +97,9 @@ public struct MailService: Sendable {
             return $0.id < $1.id
         }
         return MailPage(
-            threads: threads, next: next.isEmpty ? nil : next,
-            unreachable: unreachable.sorted(), authExpired: authExpired.sorted())
+            threads: threads, next: page.next,
+            unreachable: Set(unreachable).union(page.unreachable).sorted(),
+            authExpired: Set(authExpired).union(page.authExpired).sorted())
     }
 
     public func getThread(account: String, id: String) async throws -> ThreadDetail {
@@ -84,39 +109,6 @@ public struct MailService: Sendable {
         // psymail-mini.
         await accounts.ensureTokens()
         return try await gmail.fetchDetail(account: account, id: id)
-    }
-}
-
-private struct AccountThreads: Sendable {
-    enum Outcome: Sendable {
-        case ok(rows: [ThreadSummary], token: String?)
-        case authExpired
-        case unreachable
-    }
-
-    var account: String
-    var outcome: Outcome
-}
-
-/// Fetch one account's page. Never throws: `auth_expired` maps to the
-/// account outcome, anything else transient maps to `unreachable`, and an
-/// unknown label (e.g. a bundle the account never created) contributes no
-/// rows rather than failing the merge.
-private func fetchThreads(
-    gmail: GmailClient, label: String, account: String, pageToken: String?
-) async -> AccountThreads {
-    do {
-        let labelID = try await gmail.resolveLabelID(label: label, account: account)
-        let (ids, token) = try await gmail.listThreadIDs(
-            account: account, labelID: labelID, pageToken: pageToken)
-        let rows = try await gmail.fetchSummaries(account: account, ids: ids)
-        return AccountThreads(account: account, outcome: .ok(rows: rows, token: token))
-    } catch _ as InvalidParamsError {
-        return AccountThreads(account: account, outcome: .ok(rows: [], token: nil))
-    } catch let error as AppError where error.code == "auth_expired" {
-        return AccountThreads(account: account, outcome: .authExpired)
-    } catch {
-        return AccountThreads(account: account, outcome: .unreachable)
     }
 }
 
