@@ -1,6 +1,8 @@
 {
   "name": "moki-desktop",
   "version": "0.0.1",
+  "description": "One person's whole day in one window — mail, messages, calendar and tasks, gathered by lens rather than by app.",
+  "author": "Bubbles Sandcastle",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
