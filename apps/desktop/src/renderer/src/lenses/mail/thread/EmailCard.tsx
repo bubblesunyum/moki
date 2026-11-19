@@ -1,7 +1,7 @@
 import type { MailMessage } from '../../../../../../../../packages/protocol/src/index'
 import { Text } from '../../../ui'
 import { EmailBody } from './EmailBody'
-import { formatMessageDate } from './dates'
+import { formatListDate } from '../formatListDate'
 
 export interface EmailCardProps {
   message: MailMessage
@@ -13,7 +13,7 @@ export function EmailCard({ message }: EmailCardProps): React.JSX.Element {
   const sender = message.isFromMe
     ? 'You'
     : message.from.name.trim() || message.from.address
-  const date = formatMessageDate(message.date)
+  const date = formatListDate(message.date)
   return (
     <article className="moki-email" data-testid={`email-card-${message.id}`}>
       <div className="moki-email-meta">

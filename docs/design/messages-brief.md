@@ -185,9 +185,10 @@ Layout, top to bottom (column, width 153):
     - 10px glyph stroked `#0A0D1A` at about 1.1px
     - Email: amber with `mail`. Text: mint with `message-circle`. Slack: violet with `hash`. Discord is not shown in a row; by analogy use coral with `headphones`.
   - **Text column**: flex 1, gap 2.
-    - Top line: name `Lenses/Control` 13/500 in `color/ink`, ellipsis, flex 1. Gap 8. Time `Lenses/Small` 11/600 in `color/faint`, no shrink.
-    - Preview: `Lenses/Text` 13/400 in `color/muted`, one line with ellipsis.
-    - Time format: "1h", "3h", then weekday "Sun"/"Sat"/"Fri", and so on.
+    - Top line: name `Lenses/Control` 13/500, ellipsis, flex 1 — unread names render bolder (`Lenses/Control selected` 13/700) in `color/ink` (white when the row is selected); read names render in `color/muted`. Gap 8. Time `Lenses/Small` 11/600 in `color/faint`, no shrink.
+    - Preview: `Lenses/Text` 13/400, one line with ellipsis — unread in `color/ink` (white when selected), read in `color/muted`.
+    - Time format (psymail `stringForDate` semantics; explicit override of the earlier relative scheme): today "3:04 PM", yesterday "Yesterday, 3:04 PM", within six days "Wed 3:04 PM", older "Nov 3, AM" (numeric with year past January 1: "1/5/25, AM").
+    - Unread dot: accent dot at the avatar's top-left (~30% of avatar, hairline ring), opposite the source badge — mirrors psymail's `SenderAvatar` unread dot.
     - Group threads prefix the preview with "Noor: …".
   - **Selected variant** (`250:106`, 60 tall; older and not used in the canonical frame):
     - fill `linear-gradient(90deg, rgba(61,232,255,.28), rgba(139,108,255,.18))`

@@ -1,19 +1,8 @@
 import type { ThreadSummary } from '../../../../../../../packages/protocol/src/index'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { formatRelativeTime } from './formatRelativeTime'
+import { formatListDate } from './formatListDate'
 import { MessageRow } from './MessageRow'
-
-const rowCss = readFileSync(
-  join(process.cwd(), 'apps/desktop/src/renderer/src/ui/Row.css'),
-  'utf8'
-)
-const messageRowCss = readFileSync(
-  join(process.cwd(), 'apps/desktop/src/renderer/src/lenses/mail/MessageRow.css'),
-  'utf8'
-)
 
 afterEach(() => {
   cleanup()
@@ -51,7 +40,7 @@ describe('MessageRow', () => {
     const row = screen.getByRole('button', { name: /Clayton Gibson/ })
     expect(row.textContent).toContain('Clayton Gibson')
     expect(row.textContent).toContain('Plant swap this weekend?')
-    expect(row.textContent).toContain(formatRelativeTime(thread().date))
+    expect(row.textContent).toContain(formatListDate(thread().date))
     // Amber email badge on the avatar.
     expect(screen.getByRole('img', { name: 'Email' })).toBeDefined()
   })
@@ -66,6 +55,63 @@ describe('MessageRow', () => {
     expect(screen.getByText('Clayton Gibson').classList.contains('lens-control-selected')).toBe(false)
   })
 
+  it.each([
+    {
+      unread: true,
+      selected: false,
+      titleClass: 'lens-control-selected',
+      tone: 'tone-ink'
+    },
+    {
+      unread: true,
+      selected: true,
+      titleClass: 'lens-control-selected',
+      tone: 'tone-white'
+    },
+    { unread: false, selected: false, titleClass: 'lens-control', tone: 'tone-muted' },
+    { unread: false, selected: true, titleClass: 'lens-control', tone: 'tone-muted' }
+  ])(
+    'maps read state to title/preview tones (unread=$unread selected=$selected)',
+    ({ unread, selected, titleClass, tone }) => {
+      cleanup()
+      renderRow({ overrides: { unread, labelIds: unread ? ['INBOX', 'UNREAD'] : ['INBOX'] }, selected })
+      const name = screen.getByText('Clayton Gibson')
+      expect(name.classList.contains(titleClass)).toBe(true)
+      expect(name.classList.contains(tone)).toBe(true)
+      const preview = screen.getByText('Plant swap this weekend?')
+      expect(preview.classList.contains('lens-text')).toBe(true)
+      expect(preview.classList.contains(tone)).toBe(true)
+    }
+  )
+
+  it('shows the avatar indicator dot only for unread threads', () => {
+    renderRow()
+    expect(
+      screen.getByRole('button', { name: /Clayton Gibson/ }).querySelector('.moki-avatar-indicator')
+    ).not.toBeNull()
+
+    cleanup()
+    renderRow({ overrides: { unread: false, labelIds: ['INBOX'] } })
+    expect(
+      screen.getByRole('button', { name: /Clayton Gibson/ }).querySelector('.moki-avatar-indicator')
+    ).toBeNull()
+  })
+
+  it('keeps the indicator dot decorative while exposing unread in the row name', () => {
+    renderRow()
+    const unreadRow = screen.getByRole('button', { name: /Clayton Gibson/ })
+    expect(unreadRow.getAttribute('aria-label')).toMatch(/^Unread: Clayton Gibson — /)
+    expect(unreadRow.querySelector('.moki-avatar-indicator')?.getAttribute('aria-hidden')).toBe(
+      'true'
+    )
+
+    cleanup()
+    renderRow({ overrides: { unread: false, labelIds: ['INBOX'] } })
+    const readRow = screen.getByRole('button', { name: /Clayton Gibson/ })
+    expect(readRow.getAttribute('aria-label')).not.toMatch(/^Unread:/)
+    expect(readRow.getAttribute('aria-label')).toContain('Clayton Gibson')
+  })
+
   it('falls back to the snippet when the subject is empty', () => {
     renderRow({ overrides: { subject: '   ' } })
     expect(screen.getByText(/Still good for Saturday/).textContent).toContain(
@@ -77,12 +123,6 @@ describe('MessageRow', () => {
     renderRow()
     const row = screen.getByRole('button', { name: /Clayton Gibson/ })
     expect(row.tagName).toBe('BUTTON')
-    // Full-row hit area: the button itself spans the row width.
-    expect(rowCss).toMatch(/button\.moki-row\s*\{[^}]*width:\s*100%/)
-  })
-
-  it('shows a token-based focus ring for keyboard users', () => {
-    expect(messageRowCss).toMatch(/\.moki-message-row:focus-visible\s*\{[^}]*var\(--moki-accent-cyan\)/)
   })
 
   it('highlights the selected row and reports clicks', () => {

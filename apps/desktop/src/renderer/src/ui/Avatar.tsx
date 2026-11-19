@@ -53,12 +53,18 @@ export interface AvatarProps extends HTMLAttributes<HTMLDivElement> {
   name: string
   size?: number
   badge?: ReactNode
+  /* Generic indicator slot (e.g. the inbox unread dot): rendered at the
+   * top-left, opposite the source badge (bottom-right) so the two never
+   * overlap. Callers pass the full element, including its class and
+   * aria-hidden when decorative. */
+  indicator?: ReactNode
 }
 
 export function Avatar({
   name,
   size = 32,
   badge,
+  indicator,
   className,
   style,
   ...rest
@@ -86,6 +92,7 @@ export function Avatar({
         {avatarInitials(name)}
       </span>
       {badge ? <span className="moki-avatar-badge">{badge}</span> : null}
+      {indicator ?? null}
     </div>
   )
 }

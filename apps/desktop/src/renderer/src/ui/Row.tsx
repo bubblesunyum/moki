@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
 import './Row.css'
-import { Text } from './Text'
+import { Text, type TextTone, type TextVariant } from './Text'
 
 export interface RowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /* Render as a native <button> for fully clickable rows (MessageRow), so
@@ -9,9 +9,16 @@ export interface RowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> 
   type?: ButtonHTMLAttributes<HTMLButtonElement>['type']
   leading?: ReactNode
   title: ReactNode
+  /* Title typography: defaults keep today's Messages rendering (control,
+   * ink — white when selected). MessageRow passes plain strings plus
+   * variant/tone instead of pre-wrapped <Text>s. */
+  titleVariant?: TextVariant
+  titleTone?: TextTone
   /* Top-right slot, e.g. a timestamp. */
   meta?: ReactNode
   preview?: ReactNode
+  /* Preview color; defaults to the variant default (muted). */
+  previewTone?: TextTone
   trailing?: ReactNode
   selected?: boolean
 }
@@ -23,8 +30,11 @@ export function Row({
   type = 'button',
   leading,
   title,
+  titleVariant = 'control',
+  titleTone,
   meta,
   preview,
+  previewTone,
   trailing,
   selected = false,
   className,
@@ -38,7 +48,11 @@ export function Row({
       {leading}
       <div className="moki-row-body">
         <div className="moki-row-top">
-          <Text variant="control" tone={selected ? 'white' : 'ink'} className="moki-row-title">
+          <Text
+            variant={titleVariant}
+            tone={titleTone ?? (selected ? 'white' : 'ink')}
+            className="moki-row-title"
+          >
             {title}
           </Text>
           {meta ? (
@@ -48,7 +62,7 @@ export function Row({
           ) : null}
         </div>
         {preview ? (
-          <Text variant="text" className="moki-row-preview">
+          <Text variant="text" tone={previewTone} className="moki-row-preview">
             {preview}
           </Text>
         ) : null}

@@ -86,4 +86,19 @@ describe('Avatar', () => {
     render(<Avatar name="Brooke" badge={<span data-testid="badge" />} />)
     expect(screen.getByTestId('badge')).toBeDefined()
   })
+
+  it('renders the indicator slot only when provided', () => {
+    const { container, rerender } = render(<Avatar name="Brooke" />)
+    expect(container.querySelector('.moki-avatar-indicator')).toBeNull()
+
+    rerender(
+      <Avatar
+        name="Brooke"
+        indicator={<span className="moki-avatar-indicator" aria-hidden="true" />}
+      />
+    )
+    const dot = container.querySelector('.moki-avatar-indicator')
+    expect(dot).not.toBeNull()
+    expect(dot?.getAttribute('aria-hidden')).toBe('true')
+  })
 })

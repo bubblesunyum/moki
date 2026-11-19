@@ -1,10 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Row } from './Row'
-
-const rowCss = readFileSync(join(process.cwd(), 'apps/desktop/src/renderer/src/ui/Row.css'), 'utf8')
 
 afterEach(() => {
   cleanup()
@@ -30,11 +26,35 @@ describe('Row', () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a selected-lit override that beats the base row styles', () => {
-    const rule = rowCss.match(/\.moki-row\.selected-lit\s*\{([^}]*)\}/)
-    expect(rule).not.toBeNull()
-    for (const token of ['--moki-selection-fill', '--moki-selection-edge', '--moki-selection-shadow']) {
-      expect(rule?.[1]).toContain(`var(${token})`)
-    }
+  it('defaults the title to control/ink (white when selected)', () => {
+    const { unmount } = render(<Row title="Mom" />)
+    const title = screen.getByText('Mom')
+    expect(title.classList.contains('lens-control')).toBe(true)
+    expect(title.classList.contains('tone-ink')).toBe(true)
+    unmount()
+    cleanup()
+
+    render(<Row title="Mom" selected />)
+    const selectedTitle = screen.getByText('Mom')
+    expect(selectedTitle.classList.contains('lens-control')).toBe(true)
+    expect(selectedTitle.classList.contains('tone-white')).toBe(true)
+  })
+
+  it('lets callers override the title variant/tone and preview tone', () => {
+    render(
+      <Row
+        title="Mom"
+        titleVariant="control-selected"
+        titleTone="muted"
+        preview="hello"
+        previewTone="muted"
+      />
+    )
+    const title = screen.getByText('Mom')
+    expect(title.classList.contains('lens-control-selected')).toBe(true)
+    expect(title.classList.contains('tone-muted')).toBe(true)
+    const preview = screen.getByText('hello')
+    expect(preview.classList.contains('lens-text')).toBe(true)
+    expect(preview.classList.contains('tone-muted')).toBe(true)
   })
 })

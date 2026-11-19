@@ -24,6 +24,23 @@
   display: inline-flex;
 }
 
+/* Indicator slot (e.g. the inbox unread dot, psymail SenderAvatar): ~30%
+ * of the avatar, accent fill with a hairline ring, pinned to the top-left
+ * — opposite the source badge. */
+.moki-avatar-indicator {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 30%;
+  height: 30%;
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 50%;
+  background: var(--moki-accent-cyan);
+  border: 1px solid var(--moki-badge-ink);
+  box-sizing: border-box;
+}
+
 .moki-avatar-badge-dot {
   width: 16px;
   height: 16px;

@@ -6,7 +6,7 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RpcProvider } from '../../rpc/provider'
-import { formatRelativeTime } from './formatRelativeTime'
+import { formatListDate } from './formatListDate'
 import { useInboxThreads } from './hooks/useInboxThreads'
 import { useSelectedThread } from './hooks/useSelectedThread'
 import { ThreadList } from './ThreadList'
@@ -130,7 +130,7 @@ describe('ThreadList', () => {
 
     expect(await screen.findByText('Subject t1')).toBeDefined()
     expect(screen.getByText('Subject t2')).toBeDefined()
-    expect(screen.getByText(formatRelativeTime(firstPage[0]!.date))).toBeDefined()
+    expect(screen.getByText(formatListDate(firstPage[0]!.date))).toBeDefined()
 
     intersect()
     expect(await screen.findByText('Subject t3')).toBeDefined()
