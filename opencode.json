@@ -15,7 +15,8 @@
   "permission": {
     "external_directory": {
       "/tmp/*": "allow",
-      "/private/tmp/*": "allow"
+      "/private/tmp/*": "allow",
+      "/Users/bubbles/dev/harness-starter/template/*": "allow"
     },
     "edit": {
       "/tmp/*": "deny",
