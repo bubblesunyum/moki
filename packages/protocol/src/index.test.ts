@@ -49,6 +49,7 @@ describe('protocol', () => {
           date: new Date().toISOString(),
           unread: true,
           messageCount: 1,
+          pinned: false,
           labelIds: ['INBOX', 'UNREAD']
         }
       ],
@@ -62,6 +63,30 @@ describe('protocol', () => {
     // Dates cross as ISO8601 strings, so they must round-trip.
     expect(Number.isNaN(Date.parse(result.threads[0].date))).toBe(false)
     expect(result.authExpired).toEqual(['b@example.com'])
+  })
+
+  it('types a pinned multi-message thread', () => {
+    const result: MailListThreadsResult = {
+      threads: [
+        {
+          id: 't2',
+          account: 'a@example.com',
+          from: { name: 'Priya', address: 'priya@example.com' },
+          subject: 'Dinner Thursday?',
+          snippet: '7ish is perfect',
+          date: new Date().toISOString(),
+          unread: false,
+          messageCount: 3,
+          pinned: true,
+          labelIds: ['INBOX']
+        }
+      ],
+      next: undefined,
+      unreachable: [],
+      authExpired: []
+    }
+    expect(result.threads[0].pinned).toBe(true)
+    expect(result.threads[0].messageCount).toBe(3)
   })
 
   it('types mail.getThread', () => {

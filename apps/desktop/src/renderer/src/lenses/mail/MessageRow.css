@@ -11,3 +11,29 @@
   outline: 1px solid var(--moki-accent-cyan);
   outline-offset: -1px;
 }
+
+/* Count pill after the sender (psymail's threadCount capsule): Lenses/small
+ * on a quiet-fill capsule. It lives inside the title line, so it carries its
+ * own left margin — the row-top gap only separates title from meta. */
+.moki-message-row-count {
+  margin-left: var(--moki-space-8);
+  padding: 1px 5px;
+  border-radius: var(--moki-radius-pill);
+  background: var(--moki-quiet-fill);
+}
+
+/* Pin before the date (psymail's pin.fill): accent, rotated -35° like
+ * `PinButton.pinnedAngle`. Decorative — the row's accessible name already
+ * carries "(pinned)" when set. */
+.moki-message-row-pin {
+  flex: none;
+  color: var(--moki-accent-cyan);
+  transform: rotate(-35deg);
+}
+
+/* Meta line (pin + date) centers the pin against the timestamp. */
+.moki-message-row .moki-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+}

@@ -28,12 +28,13 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     public var date: String
     public var unread: Bool
     public var messageCount: Int
+    public var pinned: Bool
     public var labelIds: [String]
 
     public init(
         id: String, account: String, from: EmailAddress, subject: String,
         snippet: String, date: String, unread: Bool, messageCount: Int,
-        labelIds: [String]
+        labelIds: [String], pinned: Bool = false
     ) {
         self.id = id
         self.account = account
@@ -44,6 +45,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.unread = unread
         self.messageCount = messageCount
         self.labelIds = labelIds
+        self.pinned = pinned
     }
 }
 

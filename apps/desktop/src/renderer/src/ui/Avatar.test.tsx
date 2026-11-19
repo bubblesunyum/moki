@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
   Avatar,
   AVATAR_PALETTE_SIZE,
@@ -100,5 +100,74 @@ describe('Avatar', () => {
     const dot = container.querySelector('.moki-avatar-indicator')
     expect(dot).not.toBeNull()
     expect(dot?.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('Avatar photo', () => {
+  it('renders no image by default — monogram only', () => {
+    const { container } = render(<Avatar name="Ada Lovelace" />)
+    expect(container.querySelector('img.moki-avatar-photo')).toBeNull()
+    expect(screen.getByText('AL')).toBeDefined()
+  })
+
+  it('treats a null photo as absent — monogram only', () => {
+    const { container } = render(<Avatar name="Ada Lovelace" photo={null} />)
+    expect(container.querySelector('img.moki-avatar-photo')).toBeNull()
+    expect(screen.getByText('AL')).toBeDefined()
+  })
+
+  it('cover-fills a portrait and cross-fades it in over the monogram', () => {
+    const { container } = render(
+      <Avatar name="Ada Lovelace" photo={{ src: 'https://example.com/ada.jpg', kind: 'portrait' }} />
+    )
+    const img = container.querySelector('img.moki-avatar-photo')
+    expect(img?.getAttribute('src')).toBe('https://example.com/ada.jpg')
+    expect(img?.classList.contains('moki-avatar-photo--portrait')).toBe(true)
+    // Starts transparent over the monogram; the load flips the fade on.
+    expect(img?.classList.contains('is-loaded')).toBe(false)
+    expect(img?.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('AL')).toBeDefined()
+
+    fireEvent.load(img!)
+    expect(img?.classList.contains('is-loaded')).toBe(true)
+    expect(screen.getByText('AL')).toBeDefined()
+  })
+
+  it('contains a logo on a light card instead of cover-filling', () => {
+    const { container } = render(
+      <Avatar name="Substack" photo={{ src: 'https://example.com/logo.png', kind: 'logo' }} />
+    )
+    const img = container.querySelector('img.moki-avatar-photo')
+    expect(img?.classList.contains('moki-avatar-photo--logo')).toBe(true)
+    expect(img?.classList.contains('moki-avatar-photo--portrait')).toBe(false)
+  })
+
+  it('hides back to the monogram when the photo errors', () => {
+    const { container } = render(
+      <Avatar name="Ada Lovelace" photo={{ src: 'https://example.com/gone.jpg', kind: 'portrait' }} />
+    )
+    const img = container.querySelector('img.moki-avatar-photo')
+    expect(img).not.toBeNull()
+
+    fireEvent.error(img!)
+    expect(container.querySelector('img.moki-avatar-photo')).toBeNull()
+    // Monogram, badge slot and accessible name are untouched by the failure.
+    expect(screen.getByText('AL')).toBeDefined()
+    expect(screen.getByRole('img', { name: 'Ada Lovelace' })).toBeDefined()
+  })
+
+  it('shows a new src after an earlier one failed', () => {
+    const { container, rerender } = render(
+      <Avatar name="Ada Lovelace" photo={{ src: 'https://example.com/gone.jpg', kind: 'portrait' }} />
+    )
+    fireEvent.error(container.querySelector('img.moki-avatar-photo')!)
+    expect(container.querySelector('img.moki-avatar-photo')).toBeNull()
+
+    rerender(
+      <Avatar name="Ada Lovelace" photo={{ src: 'https://example.com/back.jpg', kind: 'portrait' }} />
+    )
+    expect(
+      container.querySelector('img.moki-avatar-photo')?.getAttribute('src')
+    ).toBe('https://example.com/back.jpg')
   })
 })

@@ -12,6 +12,7 @@ function thread(id: string, account: string, isoDate: string): ThreadSummary {
     date: isoDate,
     unread: false,
     messageCount: 1,
+    pinned: false,
     labelIds: ['INBOX']
   }
 }

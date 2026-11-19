@@ -53,6 +53,7 @@ function thread(id: string, minutesAgo = 30): ThreadSummary {
     date: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
     unread: false,
     messageCount: 1,
+    pinned: false,
     labelIds: ['INBOX']
   }
 }

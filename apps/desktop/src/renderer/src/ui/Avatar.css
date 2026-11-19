@@ -51,3 +51,41 @@
   justify-content: center;
   box-sizing: border-box;
 }
+
+/* Sender photo layer: absolutely positioned over the monogram it replaces,
+ * self-clipped to the circle. Starts transparent and cross-fades in on load,
+ * so a sender with a photo settles from the monogram rather than flashing —
+ * and a sender without one never leaves a hole. Decorative: the monogram
+ * initials and the avatar's accessible name stay underneath. */
+.moki-avatar-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+  pointer-events: none;
+}
+
+.moki-avatar-photo.is-loaded {
+  opacity: 1;
+}
+
+/* Portrait: a photograph shot to be cropped — cover-fills the circle edge to
+ * edge, cropping rather than insetting (an inset photo reads as a square
+ * floating in a circle). */
+.moki-avatar-photo--portrait {
+  object-fit: cover;
+}
+
+/* Logo: a mark drawn on transparency for a square — contained with room
+ * around it on a light card, so it never bleeds off the circle's edges. The
+ * app is dark-only with no light surface token; `--moki-color-ink` (#e4e9ef)
+ * doubles as the near-white card psymail paints (white at 97%). */
+.moki-avatar-photo--logo {
+  object-fit: contain;
+  box-sizing: border-box;
+  padding: 18%;
+  background: var(--moki-color-ink);
+}

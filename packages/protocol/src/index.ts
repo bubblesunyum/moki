@@ -36,6 +36,7 @@ export interface ThreadSummary {
   date: string
   unread: boolean
   messageCount: number
+  pinned: boolean
   labelIds: string[]
 }
 

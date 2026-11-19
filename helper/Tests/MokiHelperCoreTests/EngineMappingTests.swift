@@ -35,7 +35,7 @@ import Testing
             id: "m-1", threadId: "t-1", accountAddress: "a@example.com",
             fromName: "Bo", fromAddress: "bo@x.com", subject: "Hi",
             snippet: "hello", date: date, isUnread: true,
-            threadCount: 4, labelIds: ["INBOX", "UNREAD"])
+            threadCount: 4, labelIds: ["INBOX", "UNREAD"], isPinned: true)
         let summary = threadSummary(from: row)
         #expect(summary.id == "t-1")
         #expect(summary.account == "a@example.com")
@@ -46,6 +46,16 @@ import Testing
         #expect(summary.unread)
         #expect(summary.messageCount == 4)
         #expect(summary.labelIds == ["INBOX", "UNREAD"])
+        #expect(summary.pinned)
+    }
+
+    @Test func unpinnedRowMapsToUnpinnedSummary() {
+        let row = EngineThreadRow(
+            id: "m-1", threadId: "t-1", accountAddress: "a@example.com",
+            fromName: "Bo", fromAddress: "bo@x.com", subject: "Hi",
+            snippet: "hello", date: Date(timeIntervalSince1970: 1_763_380_800),
+            isUnread: false, threadCount: 1, labelIds: ["INBOX"])
+        #expect(threadSummary(from: row).pinned == false)
     }
 
     // MARK: - RFC2047 + subject fallback

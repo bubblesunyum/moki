@@ -42,6 +42,7 @@ function thread(id: string, unread = false): ThreadSummary {
     date: new Date(Date.now() - 30 * 60_000).toISOString(),
     unread,
     messageCount: 1,
+    pinned: false,
     labelIds: ['psymail/commerce']
   }
 }

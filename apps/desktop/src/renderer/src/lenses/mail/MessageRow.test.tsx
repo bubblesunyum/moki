@@ -18,6 +18,7 @@ function thread(overrides?: Partial<ThreadSummary>): ThreadSummary {
     date: new Date(Date.now() - 24 * 60_000).toISOString(),
     unread: true,
     messageCount: 1,
+    pinned: false,
     labelIds: ['INBOX', 'UNREAD'],
     ...overrides
   }
@@ -139,4 +140,35 @@ describe('MessageRow', () => {
       true
     )
   })
+
+  it.each([
+    { messageCount: 1, pinned: false, showsCount: false, showsPin: false },
+    { messageCount: 3, pinned: false, showsCount: true, showsPin: false },
+    { messageCount: 1, pinned: true, showsCount: false, showsPin: true },
+    { messageCount: 5, pinned: true, showsCount: true, showsPin: true }
+  ])(
+    'shows the count pill and pin icon independently (count=$messageCount pinned=$pinned)',
+    ({ messageCount, pinned, showsCount, showsPin }) => {
+      cleanup()
+      renderRow({ overrides: { messageCount, pinned } })
+      const row = screen.getByRole('button', { name: /Clayton Gibson/ })
+
+      const pill = row.querySelector('.moki-message-row-count')
+      expect(pill !== null).toBe(showsCount)
+      if (showsCount) {
+        expect(pill?.textContent).toBe(String(messageCount))
+        expect(pill?.classList.contains('lens-small')).toBe(true)
+      }
+
+      const pin = row.querySelector('.moki-message-row-pin')
+      expect(pin !== null).toBe(showsPin)
+      if (showsPin) {
+        expect(pin?.tagName).toBe('svg')
+        expect(pin?.getAttribute('aria-hidden')).toBe('true')
+      }
+
+      // The accessible name carries "(pinned)" only for pinned threads.
+      expect(row.getAttribute('aria-label')?.includes('(pinned)')).toBe(pinned)
+    }
+  )
 })

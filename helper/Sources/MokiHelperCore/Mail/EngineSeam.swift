@@ -22,6 +22,7 @@ public struct EngineThreadRow: Sendable, Equatable {
     public var snippet: String
     public var date: Date
     public var isUnread: Bool
+    public var isPinned: Bool
     public var threadCount: Int
     public var labelIds: [String]
 
@@ -29,7 +30,7 @@ public struct EngineThreadRow: Sendable, Equatable {
         id: String, threadId: String, accountAddress: String,
         fromName: String, fromAddress: String, subject: String,
         snippet: String, date: Date, isUnread: Bool,
-        threadCount: Int, labelIds: [String]
+        threadCount: Int, labelIds: [String], isPinned: Bool = false
     ) {
         self.id = id
         self.threadId = threadId
@@ -40,6 +41,7 @@ public struct EngineThreadRow: Sendable, Equatable {
         self.snippet = snippet
         self.date = date
         self.isUnread = isUnread
+        self.isPinned = isPinned
         self.threadCount = threadCount
         self.labelIds = labelIds
     }
@@ -50,7 +52,8 @@ public struct EngineThreadRow: Sendable, Equatable {
             accountAddress: row.accountAddress, fromName: row.fromName,
             fromAddress: row.fromAddress, subject: row.subject,
             snippet: row.snippet, date: row.date, isUnread: row.isUnread,
-            threadCount: row.threadCount, labelIds: row.labelIds)
+            threadCount: row.threadCount, labelIds: row.labelIds,
+            isPinned: row.isPinned)
     }
 }
 
@@ -129,5 +132,6 @@ func threadSummary(from row: EngineThreadRow) -> ThreadSummary {
         from: EmailAddress(name: decodeRFC2047(row.fromName), address: row.fromAddress),
         subject: nonEmpty(decodeRFC2047(row.subject)) ?? "(No subject)", snippet: row.snippet,
         date: iso8601String(row.date), unread: row.isUnread,
-        messageCount: row.threadCount, labelIds: row.labelIds)
+        messageCount: row.threadCount, labelIds: row.labelIds,
+        pinned: row.isPinned)
 }
