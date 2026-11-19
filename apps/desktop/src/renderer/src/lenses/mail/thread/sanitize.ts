@@ -30,7 +30,9 @@ let imageHookInstalled = false
 
 /* Remote images stay, but load without a referrer. Registered once:
  * DOMPurify keeps a global hook list, so adding it per call would stack
- * duplicates. */
+ * duplicates. Policy is psymail parity: direct-load everything in the body
+ * (psymail gates nothing — tracker filtering lives only in its preview-image
+ * picks, never in body rendering). */
 function ensureImageHook(): void {
   if (imageHookInstalled) return
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {

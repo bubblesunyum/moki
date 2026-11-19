@@ -79,6 +79,23 @@ describe('EmailBody', () => {
     expect(screen.getByTestId('email-text').textContent).toContain('empty message')
   })
 
+  it('renders remote images direct-loaded (psymail parity: no click-to-load)', () => {
+    mockMoki()
+    render(
+      <EmailBody
+        html='<p>news</p><img src="https://example.com/hero.png" alt="hero"><img src="https://tracker.example/open?x=1" width="1" height="1">'
+        text={null}
+      />
+    )
+    const root = screen.getByTestId('email-html').shadowRoot
+    const imgs = root?.querySelectorAll('img') ?? []
+    expect(imgs.length).toBe(2)
+    expect(imgs[0]?.getAttribute('src')).toBe('https://example.com/hero.png')
+    expect(imgs[0]?.getAttribute('referrerpolicy')).toBe('no-referrer')
+    // Tracking pixels load too: psymail filters them only for preview picks.
+    expect(imgs[1]?.getAttribute('src')).toBe('https://tracker.example/open?x=1')
+  })
+
   it('contains email CSS in an inner container our base styles win over', () => {
     mockMoki()
     render(

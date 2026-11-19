@@ -56,6 +56,17 @@ describe('sanitizeEmailHtml', () => {
     expect(out).toContain('body')
   })
 
+  it('keeps tracker-looking remote images in the body (direct-load, psymail parity)', () => {
+    // Psymail filters tracker-like URLs only when picking preview images
+    // (EmailContent.previewImages); the body itself loads everything.
+    const out = sanitizeEmailHtml(
+      '<p>news</p><img src="https://tracker.example/open?x=1" width="1" height="1"><img src="https://example.com/pixel.gif">'
+    )
+    expect(out).toContain('src="https://tracker.example/open?x=1"')
+    expect(out).toContain('src="https://example.com/pixel.gif"')
+    expect(out).toContain('referrerpolicy="no-referrer"')
+  })
+
   it('neutralizes shadow-piercing selectors in style tags', () => {
     const out = sanitizeEmailHtml(
       '<style>:host{display:none}:host(.x){color:red}::slotted(p){color:blue}p{color:green}</style><p>body</p>'
