@@ -11,7 +11,7 @@ export interface ThreadSelection {
  * 2-up view opens on a thread; afterwards the user owns the selection. */
 export function useSelectedThread(threads: ThreadSummary[] | undefined): {
   selection: ThreadSelection | null
-  select: (selection: ThreadSelection) => void
+  select: (selection: ThreadSelection | null) => void
 } {
   const [selection, setSelection] = useState<ThreadSelection | null>(null)
   useEffect(() => {

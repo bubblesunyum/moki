@@ -110,4 +110,42 @@ describe('SegmentGroup', () => {
       expect(rule?.[1]).toContain(`var(${token})`)
     }
   })
+
+  it('renders text segments with their label and no icon', () => {
+    const options: SegmentOption[] = [
+      { value: 'all', label: 'All' },
+      { value: 'unread', label: 'Unread' }
+    ]
+    render(<SegmentGroup label="Filter" value="unread" options={options} onChange={() => {}} />)
+
+    const all = screen.getByRole('radio', { name: 'All' })
+    expect(all.textContent).toBe('All')
+    expect(all.getAttribute('aria-checked')).toBe('false')
+    expect(all.querySelector('svg')).toBeNull()
+    expect(all.classList.contains('moki-segment--text')).toBe(true)
+    // The visible label is the accessible name: no aria-label/title echo.
+    expect(all.getAttribute('aria-label')).toBeNull()
+    expect(all.getAttribute('title')).toBeNull()
+
+    const unread = screen.getByRole('radio', { name: 'Unread' })
+    expect(unread.textContent).toBe('Unread')
+    expect(unread.getAttribute('aria-checked')).toBe('true')
+    expect(unread.classList.contains('selected-lit')).toBe(true)
+  })
+
+  it('keeps aria-label and title on icon buttons', () => {
+    render(<SegmentGroup label="Sources" value="text" options={OPTIONS} onChange={() => {}} />)
+    const email = screen.getByRole('radio', { name: 'Email' })
+    expect(email.getAttribute('aria-label')).toBe('Email')
+    expect(email.getAttribute('title')).toBe('Email')
+  })
+
+  it('spaces segments with a 3px gap and sizes text segments to content', () => {
+    const groupRule = segmentCss.match(/\.moki-segment-group\s*\{([^}]*)\}/)
+    expect(groupRule?.[1]).toMatch(/gap:\s*3px/)
+
+    const textRule = segmentCss.match(/\.moki-segment--text\s*\{([^}]*)\}/)
+    expect(textRule).not.toBeNull()
+    expect(textRule?.[1]).toContain('width: auto')
+  })
 })

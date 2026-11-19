@@ -10,6 +10,9 @@ export interface ThreadListProps {
   query: ReturnType<typeof useInboxThreads>
   selection: ThreadSelection | null
   onSelect: (selection: ThreadSelection) => void
+  /* Lens title for the list copy (e.g. 'Commerce'). Absent keeps the
+   * Gmail-inbox wording Messages uses. */
+  title?: string
 }
 
 function isSelected(
@@ -19,9 +22,13 @@ function isSelected(
   return selection?.account === thread.account && selection?.id === thread.id
 }
 
-function LoadingSkeletons(): React.JSX.Element {
+function LoadingSkeletons({ title }: { title?: string }): React.JSX.Element {
   return (
-    <div className="moki-thread-list" role="status" aria-label="Loading inbox">
+    <div
+      className="moki-thread-list"
+      role="status"
+      aria-label={title === undefined ? 'Loading inbox' : `Loading ${title} inbox`}
+    >
       {Array.from({ length: 6 }, (_, index) => (
         <div key={index} className="moki-thread-list-skeleton" aria-hidden="true">
           <span className="moki-thread-list-skeleton-avatar" />
@@ -35,13 +42,14 @@ function LoadingSkeletons(): React.JSX.Element {
   )
 }
 
-function FullError({ onRetry }: { onRetry: () => void }): React.JSX.Element {
+function FullError({ onRetry, title }: { onRetry: () => void; title?: string }): React.JSX.Element {
+  const text = title === undefined ? "Couldn't load the inbox" : `Couldn't load the ${title} inbox`
   return (
     <div className="moki-thread-list">
       <QuietState
         icon="mail"
-        text="Couldn't load the inbox"
-        label="Couldn't load the inbox"
+        text={text}
+        label={text}
         alert
         action={<QuietButton onClick={onRetry}>Retry</QuietButton>}
       />
@@ -53,11 +61,12 @@ function FullError({ onRetry }: { onRetry: () => void }): React.JSX.Element {
  * quiet edge states (loading skeletons, empty, signed-out, banner). An
  * accounts.list failure never replaces already-loaded threads — it only
  * becomes the full error when there is nothing else to show. */
-export function ThreadList({ query, selection, onSelect }: ThreadListProps): React.JSX.Element {
+export function ThreadList({ query, selection, onSelect, title }: ThreadListProps): React.JSX.Element {
   const accountsQuery = useAccounts()
   const { threads, unreachable, authExpired } = query
+  const emptyText = title === undefined ? 'Inbox is clear' : `${title} is clear`
 
-  if (query.isPending || accountsQuery.isPending) return <LoadingSkeletons />
+  if (query.isPending || accountsQuery.isPending) return <LoadingSkeletons title={title} />
 
   const retryAll = (): void => {
     void query.refetch()
@@ -67,8 +76,8 @@ export function ThreadList({ query, selection, onSelect }: ThreadListProps): Rea
   // Full error only when there is nothing to show; otherwise the list stays
   // up and the failure degrades to a one-line banner below.
   if (threads.length === 0 && !query.hasNextPage) {
-    if (query.isError) return <FullError onRetry={retryAll} />
-    if (accountsQuery.isError) return <FullError onRetry={retryAll} />
+    if (query.isError) return <FullError onRetry={retryAll} title={title} />
+    if (accountsQuery.isError) return <FullError onRetry={retryAll} title={title} />
   }
 
   if ((accountsQuery.data?.accounts ?? []).length === 0 && !accountsQuery.isError) {
@@ -93,7 +102,7 @@ export function ThreadList({ query, selection, onSelect }: ThreadListProps): Rea
   if (threads.length === 0 && !query.hasNextPage) {
     return (
       <div className="moki-thread-list">
-        <QuietState icon="mail" text="Inbox is clear" label="Inbox is clear" />
+        <QuietState icon="mail" text={emptyText} label={emptyText} />
       </div>
     )
   }
@@ -123,7 +132,7 @@ export function ThreadList({ query, selection, onSelect }: ThreadListProps): Rea
         renderItem={(thread) => (
           <MessageRow thread={thread} selected={isSelected(selection, thread)} onSelect={onSelect} />
         )}
-        label="Gmail inbox"
+        label={title === undefined ? 'Gmail inbox' : `${title} inbox`}
         hasMore={query.hasNextPage}
         onLoadMore={() => {
           void query.fetchNextPage()

@@ -1,12 +1,12 @@
 import { GlassPane, QuietState, type FigmaIconName } from '../../ui'
 import { useState } from 'react'
-import { useInboxThreads } from './hooks/useInboxThreads'
-import { useSelectedThread } from './hooks/useSelectedThread'
+import { useInboxThreads } from '../mail/hooks/useInboxThreads'
+import { useSelectedThread } from '../mail/hooks/useSelectedThread'
 import { MessagesToolbar, type MessageSource } from './MessagesToolbar'
-import { ThreadList } from './ThreadList'
+import { ThreadList } from '../mail/ThreadList'
 // Boundary: the thread pane is owned by the mok-ayu.4 worker (thread/**).
-import { ThreadPane } from './thread/index'
-import './MessagesLens.css'
+import { ThreadPane } from '../mail/thread/index'
+import '../mail/InboxLayout.css'
 
 const COMING_SOON_ICON: Record<Exclude<MessageSource, 'email'>, FigmaIconName> = {
   all: 'infinity',
@@ -27,12 +27,12 @@ const COMING_SOON_LABEL: Record<Exclude<MessageSource, 'email'>, string> = {
  * stay quiet with Coming soon until their beads land. */
 export function MessagesLens(): React.JSX.Element {
   const [source, setSource] = useState<MessageSource>('email')
-  const inbox = useInboxThreads(source === 'email')
+  const inbox = useInboxThreads('INBOX', source === 'email')
   const { selection, select } = useSelectedThread(source === 'email' ? inbox.threads : undefined)
 
   return (
-    <div className="moki-messages-lens">
-      <GlassPane className="moki-messages-list" data-testid="messages-list-pane">
+    <div className="moki-inbox-lens">
+      <GlassPane className="moki-inbox-list" data-testid="messages-list-pane">
         <MessagesToolbar source={source} onChange={setSource} />
         {source === 'email' ? (
           <ThreadList query={inbox} selection={selection} onSelect={select} />
@@ -44,7 +44,7 @@ export function MessagesLens(): React.JSX.Element {
           />
         )}
       </GlassPane>
-      <GlassPane className="moki-messages-thread" data-testid="messages-thread-pane">
+      <GlassPane className="moki-inbox-thread" data-testid="messages-thread-pane">
         <ThreadPane selection={source === 'email' ? selection : null} />
       </GlassPane>
     </div>

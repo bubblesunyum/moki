@@ -12,16 +12,17 @@ function pagesOf(data: unknown): MailListThreadsResult[] {
   return (data as MailPages | undefined)?.pages ?? []
 }
 
-/* Merged Gmail INBOX newest-first. The cursor rides along as params.cursor
+/* Merged Gmail newest-first for one label (INBOX or a psymail/<name>
+ * bundle tab). The cursor rides along as params.cursor
  * (result.next is the next cursor, absent when done); unreachable and
  * authExpired accounts accumulate across pages for the banner. Pages arrive
  * per account and can overlap at the boundary, so the visible list is a
  * stable merge-sort by date desc (de-duplicated by account+id) rather than a
  * raw concatenation. */
-export function useInboxThreads(enabled = true) {
+export function useInboxThreads(label = 'INBOX', enabled = true) {
   const query = useRpcInfiniteQuery<'mail.listThreads', Record<string, string> | undefined>(
     'mail.listThreads',
-    { label: 'INBOX' },
+    { label },
     (lastPage) => lastPage.next,
     undefined,
     { enabled }

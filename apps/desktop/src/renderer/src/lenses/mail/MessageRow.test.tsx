@@ -11,7 +11,7 @@ const rowCss = readFileSync(
   'utf8'
 )
 const messageRowCss = readFileSync(
-  join(process.cwd(), 'apps/desktop/src/renderer/src/lenses/messages/MessageRow.css'),
+  join(process.cwd(), 'apps/desktop/src/renderer/src/lenses/mail/MessageRow.css'),
   'utf8'
 )
 

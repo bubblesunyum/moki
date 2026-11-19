@@ -4,7 +4,7 @@ import { Icon, type FigmaIconName } from './Icon'
 
 export interface SegmentOption {
   value: string
-  icon: FigmaIconName
+  icon?: FigmaIconName
   label: string
   accent?: string
 }
@@ -12,7 +12,7 @@ export interface SegmentOption {
 export interface SegmentProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'value' | 'onSelect'> {
   value: string
-  icon: FigmaIconName
+  icon?: FigmaIconName
   label: string
   accent?: string
   selected?: boolean
@@ -38,8 +38,8 @@ export function Segment({
       type={type}
       role="radio"
       aria-checked={selected}
-      aria-label={label}
-      title={label}
+      aria-label={icon == null ? undefined : label}
+      title={icon == null ? undefined : label}
       data-value={value}
       {...rest}
       ref={ref}
@@ -47,11 +47,11 @@ export function Segment({
         onSelect?.(value)
         onClick?.(e)
       }}
-      className={['moki-segment', selected ? 'selected-lit' : null, className]
+      className={['moki-segment', icon == null ? 'moki-segment--text' : null, selected ? 'selected-lit' : null, className]
         .filter(Boolean)
         .join(' ')}
     >
-      <Icon name={icon} size={16} color={accent} />
+      {icon == null ? <span className="lens-text">{label}</span> : <Icon name={icon} size={16} color={accent} />}
     </button>
   )
 }

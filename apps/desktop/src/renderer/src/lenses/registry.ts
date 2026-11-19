@@ -1,6 +1,9 @@
 import { createElement, type ComponentType } from 'react'
 import type { FigmaIconName } from '../ui'
+import { CommerceLens } from './commerce/CommerceLens'
+import { FeedLens } from './feed/FeedLens'
 import { MessagesLens } from './messages/MessagesLens'
+import { NotificationsLens } from './notifications/NotificationsLens'
 import { PlaceholderLens } from './PlaceholderLens'
 
 export type LensId =
@@ -25,7 +28,7 @@ export interface LensDef {
   Component: ComponentType
 }
 
-/* Every lens except Messages is a placeholder until its bead lands. */
+/* Every other lens is a placeholder until its bead lands. */
 function placeholderLens(title: string): ComponentType {
   function Placeholder(): React.JSX.Element {
     return createElement(PlaceholderLens, { title })
@@ -48,14 +51,14 @@ export const LENSES: LensDef[] = [
   { id: 'docs', title: 'Docs', icon: 'notes', Component: placeholderLens('Docs') },
   { id: 'tasks', title: 'Tasks', icon: 'tasks', Component: placeholderLens('Tasks') },
   { id: 'calendar', title: 'Calendar', icon: 'calendar', Component: placeholderLens('Calendar') },
-  { id: 'feed', title: 'Feed', icon: 'globe', Component: placeholderLens('Feed') },
+  { id: 'feed', title: 'Feed', icon: 'globe', Component: FeedLens },
   {
     id: 'notifications',
     title: 'Notifications',
     icon: 'notifications',
-    Component: placeholderLens('Notifications')
+    Component: NotificationsLens
   },
-  { id: 'commerce', title: 'Commerce', icon: 'commerce', Component: placeholderLens('Commerce') },
+  { id: 'commerce', title: 'Commerce', icon: 'commerce', Component: CommerceLens },
   { id: 'library', title: 'Library', icon: 'bookmarks', Component: placeholderLens('Library') },
   { id: 'files', title: 'Files', icon: 'files', Component: placeholderLens('Files') },
   { id: 'places', title: 'Places', icon: 'map-pin', Component: placeholderLens('Places') },

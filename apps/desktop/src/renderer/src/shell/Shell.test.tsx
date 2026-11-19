@@ -49,7 +49,19 @@ describe('Shell', () => {
     expect(screen.getByTestId('messages-thread-pane')).toBeDefined()
   })
 
-  it.each(LENSES.map((lens) => lens.title))('switches to %s and highlights it', (title) => {
+  /* title → expected pane testids; null means the `${title} is coming` placeholder. */
+  it.each(
+    LENSES.map((lens) => {
+      if (lens.title === 'Messages') {
+        return { title: lens.title, panes: ['messages-list-pane', 'messages-thread-pane'] as const }
+      }
+      if (lens.title === 'Commerce' || lens.title === 'Notifications' || lens.title === 'Feed') {
+        const id = lens.title.toLowerCase()
+        return { title: lens.title, panes: [`${id}-list-pane`, `${id}-thread-pane`] as const }
+      }
+      return { title: lens.title, panes: null }
+    })
+  )('switches to $title and highlights it', ({ title, panes }) => {
     renderShell()
     const row = within(lensNav()).getByRole('button', { name: title })
     fireEvent.click(row)
@@ -57,11 +69,10 @@ describe('Shell', () => {
     expect(row.getAttribute('aria-current')).toBe('page')
     expect(row.classList.contains('selected-lit')).toBe(true)
 
-    if (title === 'Messages') {
-      expect(screen.getByTestId('messages-list-pane')).toBeDefined()
-      expect(screen.getByTestId('messages-thread-pane')).toBeDefined()
-    } else {
+    if (panes === null) {
       expect(within(screen.getByTestId('shell-content')).getByText(`${title} is coming`)).toBeDefined()
+    } else {
+      for (const testId of panes) expect(screen.getByTestId(testId)).toBeDefined()
     }
   })
 

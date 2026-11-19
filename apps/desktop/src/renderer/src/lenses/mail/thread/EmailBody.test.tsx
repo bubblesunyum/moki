@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EmailBody } from './EmailBody'
 
 const threadCss = readFileSync(
-  join(process.cwd(), 'apps/desktop/src/renderer/src/lenses/messages/thread/ThreadPane.css'),
+  join(process.cwd(), 'apps/desktop/src/renderer/src/lenses/mail/thread/ThreadPane.css'),
   'utf8'
 )
 
