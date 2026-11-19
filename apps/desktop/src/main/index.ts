@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
-import { captureWhenSettled } from './dev/capture'
+import { captureSelectionFromEnv, captureSelectionQuery, captureWhenSettled, withCaptureSelection } from './dev/capture'
 import { HelperProcess, resolveHelperBinary, setupHelperIpc } from './helper/index'
 
 let helper: HelperProcess | null = null
@@ -31,10 +31,13 @@ function createWindow(): void {
   })
 
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  const selection = captureSelectionFromEnv()
   if (rendererUrl) {
-    void win.loadURL(rendererUrl)
+    void win.loadURL(withCaptureSelection(rendererUrl, selection))
   } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'))
+    void win.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: captureSelectionQuery(selection)
+    })
   }
 }
 
