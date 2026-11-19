@@ -10,9 +10,14 @@ export interface MessageRowProps {
   thread: ThreadSummary
   selected: boolean
   onSelect: (selection: ThreadSelection) => void
+  /* Amber mail badge on the avatar. The row only knows the email badge,
+   * so the prop is email-specific; ThreadList's mixed-vs-single flag maps
+   * onto it until threads carry their own source. */
+  showEmailBadge?: boolean
 }
 
-/* One inbox row (brief §4): avatar with the amber email badge, sender name,
+/* One inbox row (brief §4): avatar (amber email badge only when asked
+ * via showEmailBadge), sender name,
  * relative time, and the subject (or the snippet when the subject is empty).
  * Unread names render bolder (Lenses/Control selected) in ink, or white
  * when selected; read names and previews render muted. The selected row
@@ -24,7 +29,7 @@ export interface MessageRowProps {
  * before the date, rotated -35° like psymail's `PinButton.pinnedAngle`. The
  * avatar resolves the sender's photo (Gravatar portrait, else brand logo)
  * and falls back to the monogram while probing or on a miss. */
-export function MessageRow({ thread, selected, onSelect }: MessageRowProps): React.JSX.Element {
+export function MessageRow({ thread, selected, onSelect, showEmailBadge = false }: MessageRowProps): React.JSX.Element {
   const senderName = thread.from.name.trim() || thread.from.address
   const preview = thread.subject.trim() || thread.snippet
   /* Read state drives the tones, mirroring psymail's text-vs-textMuted:
@@ -47,7 +52,7 @@ export function MessageRow({ thread, selected, onSelect }: MessageRowProps): Rea
           name={senderName}
           size={32}
           photo={photo}
-          badge={<AvatarBadge accent="amber" icon="mail" label="Email" />}
+          badge={showEmailBadge ? <AvatarBadge accent="amber" icon="mail" label="Email" /> : undefined}
           indicator={
             thread.unread ? (
               <span className="moki-avatar-indicator" aria-hidden="true" />

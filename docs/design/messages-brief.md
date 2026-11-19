@@ -184,6 +184,7 @@ Layout, top to bottom (column, width 153):
     - `1px solid #0A0D1A` ring (creates the cutout look)
     - 10px glyph stroked `#0A0D1A` at about 1.1px
     - Email: amber with `mail`. Text: mint with `message-circle`. Slack: violet with `hash`. Discord is not shown in a row; by analogy use coral with `headphones`.
+    - Shown only where sources mix (e.g. Messages All); single-source lists (Email, bundles) omit it as redundant.
   - **Text column**: flex 1, gap 2.
     - Top line: name `Lenses/Control` 13/500, ellipsis, flex 1 — unread names render bolder (`Lenses/Control selected` 13/700) in `color/ink` (white when the row is selected); read names render in `color/muted`. Gap 8. Time `Lenses/Small` 11/600 in `color/faint`, no shrink.
     - Preview: `Lenses/Text` 13/400, one line with ellipsis — unread in `color/ink` (white when selected), read in `color/muted`.

@@ -27,23 +27,45 @@ function thread(overrides?: Partial<ThreadSummary>): ThreadSummary {
 function renderRow(props?: {
   overrides?: Partial<ThreadSummary>
   selected?: boolean
+  showEmailBadge?: boolean
 }): { onSelect: ReturnType<typeof vi.fn> } {
   const onSelect = vi.fn()
   render(
-    <MessageRow thread={thread(props?.overrides)} selected={props?.selected ?? false} onSelect={onSelect} />
+    <MessageRow
+      thread={thread(props?.overrides)}
+      selected={props?.selected ?? false}
+      onSelect={onSelect}
+      {...(props?.showEmailBadge === undefined ? {} : { showEmailBadge: props.showEmailBadge })}
+    />
   )
   return { onSelect }
 }
 
 describe('MessageRow', () => {
   it('renders the Figma row anatomy from fixture data', () => {
-    renderRow()
+    renderRow({ showEmailBadge: true })
     const row = screen.getByRole('button', { name: /Clayton Gibson/ })
     expect(row.textContent).toContain('Clayton Gibson')
     expect(row.textContent).toContain('Plant swap this weekend?')
     expect(row.textContent).toContain(formatListDate(thread().date))
-    // Amber email badge on the avatar.
+    // Amber email badge on the avatar (mixed-source lists only).
     expect(screen.getByRole('img', { name: 'Email' })).toBeDefined()
+  })
+
+  it('hides the source badge by default on single-source lists', () => {
+    renderRow()
+    expect(screen.queryByRole('img', { name: 'Email' })).toBeNull()
+    // The accessible name is unchanged with or without the badge.
+    const hiddenName = screen
+      .getByRole('button', { name: /Clayton Gibson/ })
+      .getAttribute('aria-label')
+
+    cleanup()
+    renderRow({ showEmailBadge: true })
+    expect(screen.getByRole('img', { name: 'Email' })).toBeDefined()
+    expect(screen.getByRole('button', { name: /Clayton Gibson/ }).getAttribute('aria-label')).toBe(
+      hiddenName
+    )
   })
 
   it('renders the unread name bolder', () => {

@@ -101,16 +101,23 @@ function mockBridge(state: BridgeState): void {
   })
 }
 
-function Harness(): React.JSX.Element {
+function Harness(props?: { showSourceBadge?: boolean }): React.JSX.Element {
   const inbox = useInboxThreads()
   const { selection, select } = useSelectedThread(inbox.threads)
-  return <ThreadList query={inbox} selection={selection} onSelect={select} />
+  return (
+    <ThreadList
+      query={inbox}
+      selection={selection}
+      onSelect={select}
+      {...(props?.showSourceBadge === undefined ? {} : { showSourceBadge: props.showSourceBadge })}
+    />
+  )
 }
 
-function renderHarness(): void {
+function renderHarness(props?: { showSourceBadge?: boolean }): void {
   render(
     <RpcProvider>
-      <Harness />
+      <Harness {...(props === undefined ? {} : props)} />
     </RpcProvider>
   )
 }
@@ -260,5 +267,29 @@ describe('ThreadList', () => {
 
     expect(await screen.findByText("Couldn't load the inbox", undefined, { timeout: 5000 }))
       .toBeDefined()
+  })
+
+  it('hides source badges by default and forwards the flag to every row', async () => {
+    mockBridge({
+      accountsResult: accounts('done'),
+      first: page([thread('t1'), thread('t2')]),
+      second: page([])
+    })
+    renderHarness()
+
+    await screen.findByText('Subject t1')
+    expect(screen.queryByRole('img', { name: 'Email' })).toBeNull()
+
+    cleanup()
+    stubIntersectionObserver()
+    mockBridge({
+      accountsResult: accounts('done'),
+      first: page([thread('t1'), thread('t2')]),
+      second: page([])
+    })
+    renderHarness({ showSourceBadge: true })
+
+    await screen.findByText('Subject t1')
+    expect(screen.getAllByRole('img', { name: 'Email' })).toHaveLength(2)
   })
 })

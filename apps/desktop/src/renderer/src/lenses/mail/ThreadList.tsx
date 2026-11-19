@@ -13,6 +13,9 @@ export interface ThreadListProps {
   /* Lens title for the list copy (e.g. 'Commerce'). Absent keeps the
    * Gmail-inbox wording Messages uses. */
   title?: string
+  /* Show the amber mail badge on every row. Single-source lists omit it
+   * (redundant); mixed-source lists (e.g. Messages All) opt in. */
+  showSourceBadge?: boolean
 }
 
 function isSelected(
@@ -61,7 +64,7 @@ function FullError({ onRetry, title }: { onRetry: () => void; title?: string }):
  * quiet edge states (loading skeletons, empty, signed-out, banner). An
  * accounts.list failure never replaces already-loaded threads — it only
  * becomes the full error when there is nothing else to show. */
-export function ThreadList({ query, selection, onSelect, title }: ThreadListProps): React.JSX.Element {
+export function ThreadList({ query, selection, onSelect, title, showSourceBadge = false }: ThreadListProps): React.JSX.Element {
   const accountsQuery = useAccounts()
   const { threads, unreachable, authExpired } = query
   const emptyText = title === undefined ? 'Inbox is clear' : `${title} is clear`
@@ -130,7 +133,7 @@ export function ThreadList({ query, selection, onSelect, title }: ThreadListProp
         items={threads}
         keyOf={(thread) => `${thread.account}/${thread.id}`}
         renderItem={(thread) => (
-          <MessageRow thread={thread} selected={isSelected(selection, thread)} onSelect={onSelect} />
+          <MessageRow thread={thread} selected={isSelected(selection, thread)} onSelect={onSelect} showEmailBadge={showSourceBadge} />
         )}
         label={title === undefined ? 'Gmail inbox' : `${title} inbox`}
         hasMore={query.hasNextPage}
