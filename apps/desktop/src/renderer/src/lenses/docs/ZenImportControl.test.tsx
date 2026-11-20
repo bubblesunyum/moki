@@ -61,12 +61,16 @@ describe('Docs Zen import', () => {
     expect(before).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Import from Zen' }))
     await waitFor(() => {
-      expect(screen.getByText('Drive · ok')).toBeDefined()
+      expect(screen.getByText('Imported 5 cookies — open a doc and it should be signed in')).toBeDefined()
     })
-    expect(screen.getByText('Notion · ok')).toBeDefined()
-    expect(screen.getByText('Craft · failed')).toBeDefined()
-    // Status only: no cookie names, hosts or values reach the renderer.
-    expect(screen.getByLabelText('Zen import status').textContent).not.toMatch(/cookie|session|secret/i)
+    expect(screen.getByText('Drive · signed in')).toBeDefined()
+    expect(screen.getByText('Notion · signed in')).toBeDefined()
+    expect(screen.getByText('Craft · no Zen cookies found')).toBeDefined()
+    // Plain words now: the old cryptic per-group states are gone, and no
+    // cookie names, hosts or values reach the renderer (counts only).
+    expect(screen.queryByText('Drive · ok')).toBeNull()
+    expect(screen.queryByText('Craft · failed')).toBeNull()
+    expect(screen.getByLabelText('Zen import status').textContent).not.toMatch(/session|secret|=/i)
     await waitFor(() => {
       expect(recentsCalls.filter((method) => method === 'docs.listRecents').length).toBeGreaterThan(before)
     })
@@ -88,13 +92,52 @@ describe('Docs Zen import', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Import from Zen' }))
     await waitFor(() => {
-      expect(screen.getByText('Drive · ok')).toBeDefined()
+      expect(screen.getByText('Drive · signed in')).toBeDefined()
     })
     const button = screen.getByRole('button', { name: 'Import from Zen' })
     expect(button.getAttribute('disabled')).toBeNull()
     fireEvent.click(button)
     await waitFor(() => {
       expect(runs).toBe(2)
+    })
+  })
+
+  it('explains when Zen has nothing to import', async () => {
+    setBridge((_method, params) => {
+      const source = (params as { source: DocSource }).source
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
+    setZenImport(() =>
+      Promise.resolve({ groups: { google: 'failed', notion: 'failed', craft: 'failed' }, imported: 0, skipped: 0 })
+    )
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Import from Zen' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Import from Zen' }))
+    await waitFor(() => {
+      expect(screen.getByText('Zen may not be running or has no saved logins')).toBeDefined()
+    })
+    expect(screen.getByText('Drive · no Zen cookies found')).toBeDefined()
+    expect(screen.getByText('Notion · no Zen cookies found')).toBeDefined()
+    expect(screen.getByText('Craft · no Zen cookies found')).toBeDefined()
+  })
+
+  it('singularizes one imported cookie', async () => {
+    setBridge((_method, params) => {
+      const source = (params as { source: DocSource }).source
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
+    setZenImport(() =>
+      Promise.resolve({ groups: { google: 'ok', notion: 'failed', craft: 'failed' }, imported: 1, skipped: 0 })
+    )
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Import from Zen' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Import from Zen' }))
+    await waitFor(() => {
+      expect(screen.getByText('Imported 1 cookie — open a doc and it should be signed in')).toBeDefined()
     })
   })
 

@@ -223,3 +223,79 @@ describe('DocPreview', () => {
     expect(openExternal).toHaveBeenCalledWith(DOC_FIXTURES.drive[1].openUrl)
   })
 })
+
+/* Signed-out states (mok-8uu.11): every auth state explains itself and
+ * offers its real action — honest Drive copy with no fake button, Open
+ * Craft loading the home page in the preview, the Notion token explainer. */
+describe('Docs signed-out states', () => {
+  function signedOutBridge(signedOutSource: DocSource): void {
+    setBridge((_method, params) => {
+      const source = (params as { source: DocSource }).source
+      return Promise.resolve({
+        items: source === signedOutSource ? [] : DOC_FIXTURES[source],
+        unreachable: false,
+        signedOut: source === signedOutSource
+      })
+    })
+  }
+
+  it('drive is honest with no fake button', async () => {
+    signedOutBridge('drive')
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Drive needs sign-in')).toBeDefined()
+    })
+    expect(screen.getByText('Drive listing needs Google sign-in — not connected yet')).toBeDefined()
+    expect(screen.getByText('Zen import signs in previews, not the list')).toBeDefined()
+    expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.drive[0].id}`)).toBeNull()
+    // No action exists yet — no button anywhere in the Drive section.
+    expect(screen.getByTestId('docs-section-drive').querySelector('button')).toBeNull()
+  })
+
+  it('craft opens the home page in the preview', async () => {
+    signedOutBridge('craft')
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Craft list unavailable')).toBeDefined()
+    })
+    expect(screen.getByText('Craft list isn’t here yet — browse it in the preview')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Craft' }))
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe('https://www.craft.do')
+  })
+
+  it('craft unreachable with no rows still opens the home page', async () => {
+    setBridge((_method, params) => {
+      const source = (params as { source: DocSource }).source
+      if (source === 'craft') return Promise.resolve({ items: [], unreachable: true, signedOut: false })
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByText('Craft is unreachable')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Craft' }))
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe('https://www.craft.do')
+  })
+
+  it('notion explains the token and links to settings', async () => {
+    const openExternal = vi.fn().mockResolvedValue(undefined)
+    setBridge(
+      (_method, params) => {
+        const source = (params as { source: DocSource }).source
+        return Promise.resolve({
+          items: source === 'notion' ? [] : DOC_FIXTURES[source],
+          unreachable: false,
+          signedOut: source === 'notion'
+        })
+      },
+      { openExternal }
+    )
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Notion needs sign-in')).toBeDefined()
+    })
+    expect(screen.getByText(/stored only in the Mac Keychain/)).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Notion settings' }))
+    expect(openExternal).toHaveBeenCalledWith('https://www.notion.so/my-integrations')
+  })
+})

@@ -6,7 +6,8 @@ import { Icon, QuietButton, Text } from '../../ui'
 
 /* Zen cookie import control (mok-8uu.9) — one header-level button at the top
  * of the Docs list pane. Runs the main-process import over
- * `window.mokiZenCookies` and shows ok/failed per source. Status only:
+ * `window.mokiZenCookies` and reports plain-words status: a summary line
+ * plus one signed-in / no-cookies line per source. Status only:
  * the preload surface carries per-group ok/failed plus counts, never cookie
  * names, hosts or values, and this control renders nothing else. Re-import
  * stays idempotent (main re-runs and recounts); after every import the
@@ -53,6 +54,14 @@ function getZenImporter(): (() => Promise<ZenImportStatus>) | null {
   }
 }
 
+/* Plain-words summary: the count plus what to do next, or — when nothing
+ * came back anywhere — the likely cause. Per-group lines carry the detail. */
+function zenSummary(status: ZenImportStatus): string {
+  const allFailed = DOC_SOURCES.every((source) => status.groups[source] === 'failed')
+  if (allFailed) return 'Zen may not be running or has no saved logins'
+  return `Imported ${status.imported} ${status.imported === 1 ? 'cookie' : 'cookies'} — open a doc and it should be signed in`
+}
+
 export function ZenImportControl(): React.JSX.Element | null {
   const queryClient = useQueryClient()
   /* Per-render const, not state: a late-injected preload surface must show
@@ -87,10 +96,14 @@ export function ZenImportControl(): React.JSX.Element | null {
       </QuietButton>
       {status !== null && (
         <div className="moki-docs-zen-status" role="status" aria-label="Zen import status">
+          <Text variant="small" tone="muted" as="p" className="moki-docs-zen-row">
+            {zenSummary(status)}
+          </Text>
           {DOC_SOURCES.map((source) => (
             <Text key={source} variant="small" tone="muted" as="p" className="moki-docs-zen-row">
               <Icon name={status.groups[source] === 'ok' ? 'check' : 'x'} size={12} aria-hidden />
-              {DOC_SOURCE_LABEL[source]} · {status.groups[source]}
+              {DOC_SOURCE_LABEL[source]} ·{' '}
+              {status.groups[source] === 'ok' ? 'signed in' : 'no Zen cookies found'}
             </Text>
           ))}
         </div>

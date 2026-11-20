@@ -1,15 +1,37 @@
 import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { callBridge } from '../../rpc/bridge'
+import { callBridge, getBridge } from '../../rpc/bridge'
 import { QuietButton, Text } from '../../ui'
 
-/* Notion token auth (mok-8uu.10). The integration token lives in the helper
- * Keychain: the form reads the field once at submit and passes it straight
- * to `notion.setToken` — never into React state, never into localStorage —
- * then clears the field. Sign-out calls `notion.signOut` (server-side wipe)
- * and flips the section to signed-out immediately with an optimistic cache
- * write before the refetch lands. */
+/* Notion integration-token settings page. The token itself stays
+ * Keychain-only — the form below reads the field once at submit. */
+const NOTION_INTEGRATIONS_URL = 'https://www.notion.so/my-integrations'
 
+function openNotionIntegrations(): void {
+  getBridge()?.openExternal(NOTION_INTEGRATIONS_URL).catch(() => undefined)
+}
+
+/* Signed-out explainer: what the token is, where to get it, where it's
+ * kept — plus the form. One element so the lens's notion branch reads
+ * like the drive/craft branches. */
+export function NotionSignedOutExplainer(): React.JSX.Element {
+  return (
+    <>
+      <Text variant="small" tone="muted" as="p" className="moki-docs-auth-note">
+        Integration token from{' '}
+        <button type="button" className="moki-docs-link" onClick={openNotionIntegrations}>
+          Notion settings
+        </button>{' '}
+        — stored only in the Mac Keychain
+      </Text>
+      <NotionTokenForm />
+    </>
+  )
+}
+
+/* Token form: reads the field once at submit and passes it straight to
+ * `notion.setToken` — never into React state, never into localStorage —
+ * then clears the field. */
 export function NotionTokenForm(): React.JSX.Element {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)

@@ -1,19 +1,41 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DocItem, DocSource } from '../../../../../../../packages/protocol/src/index'
-import { GlassPane, Icon, QuietState, Text } from '../../ui'
+import { GlassPane, Icon, QuietButton, QuietState, Text } from '../../ui'
 import { formatListDate } from '../mail/formatListDate'
 import { DocPreview } from './DocPreview'
 import { DOC_SOURCES, DOC_SOURCE_LABEL } from './fixtures'
 import { useDocsRecents, type DocsRecents } from './useDocsRecents'
 import { getBridge } from '../../rpc/bridge'
 import { ZenImportControl } from './ZenImportControl'
-import { NotionSignOutButton, NotionTokenForm } from './NotionAuth'
+import { NotionSignedOutExplainer, NotionSignOutButton } from './NotionAuth'
 import '../mail/InboxLayout.css'
 import './DocsLens.css'
 
 function queryParam(name: string): string | undefined {
   const raw = new URLSearchParams(window.location.search).get(name)?.trim()
   return raw === null || raw === undefined || raw === '' ? undefined : raw
+}
+
+/* Synthetic Craft home selection (mok-8uu.11): the Craft listing API is
+ * still pending (mok-8uu.6), so signed-out and empty-unreachable states
+ * offer Open Craft, which selects this doc and loads the Craft home page
+ * in the preview pane for sign-in and browsing. Presentation, not contract
+ * data — it lives here, not in fixtures.ts, and never appears in any
+ * section's items (resolved by id outside `all`). */
+const CRAFT_HOME_DOC: DocItem = {
+  id: 'craft-home',
+  title: 'Craft',
+  source: 'craft',
+  updatedAt: new Date(0).toISOString(),
+  openUrl: 'https://www.craft.do'
+}
+
+function OpenCraftAction({ onSelect }: { onSelect: (doc: DocItem) => void }): React.JSX.Element {
+  return (
+    <QuietButton type="button" onClick={() => onSelect(CRAFT_HOME_DOC)}>
+      Open Craft
+    </QuietButton>
+  )
 }
 
 /* Capture override (dev only, via ?mokiDoc= on the startup URL): preselects
@@ -26,6 +48,9 @@ function preferredDocId(): string | undefined {
     return undefined
   }
 }
+
+/* Notion integration-token settings page: see NotionSignedOutExplainer in
+ * NotionAuth (the token itself stays Keychain-only). */
 
 function DocRow({
   doc,
@@ -108,15 +133,37 @@ function DocSection({
           </Text>
         </div>
         <div className="moki-docs-section-state">
-          <QuietState
-            icon="notes"
-            text={`Sign in to ${DOC_SOURCE_LABEL[source]}`}
-            label={`${DOC_SOURCE_LABEL[source]} needs sign-in`}
-          />
+          {source === 'drive' && (
+            <>
+              <QuietState
+                icon="notes"
+                text="Drive listing needs Google sign-in — not connected yet"
+                label="Drive needs sign-in"
+              />
+              <Text variant="small" tone="muted" as="p" className="moki-docs-auth-note">
+                Zen import signs in previews, not the list
+              </Text>
+            </>
+          )}
+          {source === 'craft' && (
+            <QuietState
+              icon="notes"
+              text="Craft list isn’t here yet — browse it in the preview"
+              label="Craft list unavailable"
+              action={<OpenCraftAction onSelect={onSelect} />}
+            />
+          )}
           {source === 'notion' && (
-            <div className="moki-docs-auth">
-              <NotionTokenForm />
-            </div>
+            <>
+              <QuietState
+                icon="notes"
+                text="Sign in to Notion"
+                label="Notion needs sign-in"
+              />
+              <div className="moki-docs-auth">
+                <NotionSignedOutExplainer />
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -140,6 +187,11 @@ function DocSection({
         <DocRow key={doc.id} doc={doc} selected={doc.id === selectedId} onSelect={onSelect} />
       ))}
       {notice !== null && <SectionNotice text={notice} />}
+      {source === 'craft' && query.status === 'unreachable' && query.items.length === 0 && (
+        <div className="moki-docs-section-state">
+          <OpenCraftAction onSelect={onSelect} />
+        </div>
+      )}
     </section>
   )
 }
@@ -166,14 +218,17 @@ export function DocsLens(): React.JSX.Element {
   const all = useMemo(() => sections.flatMap(({ query }) => query.items), [sections])
 
   /* A picked row that vanishes (signed-out, refetch) clears the selection —
-   * the preview goes empty rather than swapping unprompted. */
+   * the preview goes empty rather than swapping unprompted. The synthetic
+   * Craft home pick is exempt: it never appears in `all`. */
   useEffect(() => {
+    if (selectedId === CRAFT_HOME_DOC.id) return
     if (hasPicked && selectedId !== null && !all.some((doc) => doc.id === selectedId)) {
       setSelectedId(null)
     }
   }, [all, hasPicked, selectedId])
 
   const selected: DocItem | null = useMemo(() => {
+    if (selectedId === CRAFT_HOME_DOC.id) return CRAFT_HOME_DOC
     if (selectedId !== null) return all.find((doc) => doc.id === selectedId) ?? null
     if (hasPicked) return null
     if (all.length === 0) return null
