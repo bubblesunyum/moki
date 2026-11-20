@@ -113,7 +113,79 @@ export type RpcResult<M extends RpcMethod> = RpcMethodMap[M]['result']
 
 export interface RpcNotificationMap {
   'helper.status': { status: 'starting' | 'ok' | 'down' }
+  'day.clipboardChanged': { entry: DayClipboardEntry }
 }
+
+/** Live Day-lens entries served by the Electron main process. */
+
+export interface DayClipboardEntry {
+  id: string
+  text: string
+  copiedAt: number
+}
+
+export interface DayDownloadsEntry {
+  name: string
+  fullPath: string
+  mtimeMs: number
+  isDir: boolean
+}
+
+export interface DayUsageWindow {
+  /** 0–100. */
+  percent: number
+  /** ISO8601 reset time, or null when the server omits it. */
+  resetsAt: string | null
+  limited?: boolean
+}
+
+export interface DayUsageResult {
+  status: 'live' | 'missing-login' | 'unavailable'
+  rolling?: DayUsageWindow
+  weekly?: DayUsageWindow
+  monthly?: DayUsageWindow
+  /** Last good live snapshot, kept so the widget can label stale data. */
+  lastGood?: { rolling?: DayUsageWindow; weekly?: DayUsageWindow; monthly?: DayUsageWindow }
+  message?: string
+}
+
+export interface DaySystemProcess {
+  pid: number
+  /** Recent %CPU as reported by ps. */
+  cpu: number
+  name: string
+}
+
+export interface DaySystemResult {
+  /** Null until the second sample (needs a busy/total delta). */
+  cpuPercent: number | null
+  cpuCores: number
+  memoryUsedBytes: number
+  memoryTotalBytes: number
+  memoryPressure: 'normal' | 'warning' | 'critical'
+  /** Null on desktops / when no battery is present. */
+  batteryPercent: number | null
+  batteryCharging: boolean | null
+  /** Minutes remaining, or null when unknown. */
+  batteryMinutesLeft: number | null
+  breakdown: DaySystemProcess[]
+  sampledAt: number
+}
+
+/** Main-process (`day:call`) methods: live Day data, no helper involved. */
+export interface DayLocalMap {
+  'day.clipboardList': { params: void; result: { entries: DayClipboardEntry[] } }
+  'day.clipboardClear': { params: void; result: { ok: true } }
+  'day.downloadsList': { params: { showHidden?: boolean } | void; result: { entries: DayDownloadsEntry[] } }
+  'day.openPath': { params: { path: string }; result: { ok: true } }
+  'day.revealPath': { params: { path: string }; result: { ok: true } }
+  'day.usageGet': { params: void; result: DayUsageResult }
+  'day.systemGet': { params: void; result: DaySystemResult }
+}
+
+export type DayLocalMethod = keyof DayLocalMap
+export type DayLocalParams<M extends DayLocalMethod> = DayLocalMap[M]['params']
+export type DayLocalResult<M extends DayLocalMethod> = DayLocalMap[M]['result']
 
 export type RpcNotificationName = keyof RpcNotificationMap
 export type RpcNotificationParams<N extends RpcNotificationName> = RpcNotificationMap[N]
@@ -138,4 +210,6 @@ export interface MokiApi {
     cb: (params: RpcNotificationParams<N>) => void
   ): () => void
   openExternal(url: string): Promise<void>
+  /** Main-process Day methods over the `day:call` channel (no helper). */
+  local<M extends DayLocalMethod>(method: M, params?: DayLocalParams<M>): Promise<DayLocalResult<M>>
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Text } from '../../../ui'
+import { Icon, IconButton, Text } from '../../../ui'
 import { usePersistentState } from '../hooks/usePersistentState'
 
 export const FOCUS_STORAGE_KEY = 'moki.day.focus'
@@ -161,70 +161,107 @@ export function useFocusTimer(): {
 
 export function FocusWidget(): React.JSX.Element {
   const timer = useFocusTimer()
+  const [showSettings, setShowSettings] = useState(true)
 
-  const label = timer.phase === 'focus' ? 'Focus' : timer.phase === 'break' ? 'Break' : 'Ready'
+  const totalSec = (timer.phase === 'break' ? timer.breakMin : timer.focusMin) * 60 || 1
+  const fraction = timer.phase === null ? 1 : Math.min(1, Math.max(0, timer.remainingSec / totalSec))
+  const isLastMinute = timer.status === 'running' && timer.remainingSec < 60
+  const ringTone = isLastMinute ? 'is-urgent' : timer.phase === 'break' ? 'is-break' : 'is-focus'
+
+  const R = 25
+  const C = 2 * Math.PI * R
+
+  function centerAction(): void {
+    if (timer.status === 'running') timer.pause()
+    else if (timer.status === 'paused') timer.resume()
+    else if (timer.status === 'pending' && timer.phase === 'break') timer.start('break')
+    else timer.start('focus')
+  }
+
+  const centerLabel =
+    timer.status === 'running'
+      ? 'Pause'
+      : timer.status === 'paused'
+        ? 'Resume'
+        : timer.status === 'pending' && timer.phase === 'break'
+          ? 'Start break'
+          : 'Start focus'
 
   return (
     <div className="moki-focus" data-testid="focus-widget">
-      <Text variant="title" as="div" data-testid="focus-clock">
-        {formatClock(timer.remainingSec)}
-      </Text>
-      <Text variant="small" tone="faint">
-        {label} · {timer.status} · {timer.completedToday} done today
-      </Text>
-      <div className="moki-focus-buttons">
-        {timer.status === 'running' ? (
-          <button type="button" onClick={timer.pause}>
-            Pause
+      <div className="moki-focus-main">
+        <div className="moki-focus-ringwrap">
+          <svg className="moki-focus-ring" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+            <circle className="moki-focus-track" cx="28" cy="28" r={R} />
+            <circle
+              className={['moki-focus-arc', ringTone].join(' ')}
+              cx="28"
+              cy="28"
+              r={R}
+              strokeDasharray={C}
+              strokeDashoffset={C * (1 - fraction)}
+            />
+          </svg>
+          <button type="button" className="moki-focus-transport" onClick={centerAction} aria-label={centerLabel}>
+            <Icon name={timer.status === 'running' ? 'pause' : 'play'} size={18} />
           </button>
-        ) : timer.status === 'paused' ? (
-          <button type="button" onClick={timer.resume}>
-            Resume
+          <span className="moki-focus-crown" role="status" title={`${timer.completedToday} in Focus today`}>
+            {timer.completedToday}
+          </span>
+        </div>
+        <div className="moki-focus-column">
+          <div className="moki-focus-timerrow">
+            <Text variant="title" as="div" data-testid="focus-clock" className="moki-focus-clock">
+              {formatClock(timer.remainingSec)}
+            </Text>
+            <span className="moki-focus-controls">
+              {(timer.status === 'running' || timer.status === 'paused') && (
+                <IconButton icon="rotate-cw" label="Reset" size="sm" iconSize={16} onClick={timer.reset} />
+              )}
+              {timer.status === 'running' && (
+                <IconButton icon="skip-forward" label="Skip" size="sm" iconSize={16} onClick={timer.skip} />
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="moki-focus-pill"
+            aria-expanded={showSettings}
+            aria-label={`Focus length, ${timer.focusMin} minutes, break length, ${timer.breakMin} minutes. Change durations.`}
+            onClick={() => setShowSettings((v) => !v)}
+          >
+            <Text variant="control" as="span">
+              {timer.focusMin} min • {timer.breakMin} min
+            </Text>
           </button>
-        ) : timer.status === 'pending' && timer.phase === 'break' ? (
-          <button type="button" onClick={() => timer.start('break')}>
-            Start break
-          </button>
-        ) : (
-          <button type="button" onClick={() => timer.start('focus')}>
-            Start focus
-          </button>
-        )}
-        {timer.phase !== null && (
-          <>
-            <button type="button" onClick={timer.skip}>
-              Skip
-            </button>
-            <button type="button" onClick={timer.reset}>
-              Reset
-            </button>
-          </>
-        )}
+        </div>
       </div>
-      <div className="moki-focus-settings">
-        <label>
-          <Text variant="small">Focus min</Text>
-          <input
-            aria-label="Focus minutes"
-            type="number"
-            min={1}
-            max={FOCUS_MIN_MAX}
-            value={timer.focusMin}
-            onChange={(e) => timer.setFocusMin(Number(e.target.value))}
-          />
-        </label>
-        <label>
-          <Text variant="small">Break min</Text>
-          <input
-            aria-label="Break minutes"
-            type="number"
-            min={1}
-            max={BREAK_MIN_MAX}
-            value={timer.breakMin}
-            onChange={(e) => timer.setBreakMin(Number(e.target.value))}
-          />
-        </label>
-      </div>
+      {showSettings && (
+        <div className="moki-focus-settings">
+          <label>
+            <Text variant="small">Focus min</Text>
+            <input
+              aria-label="Focus minutes"
+              type="number"
+              min={1}
+              max={FOCUS_MIN_MAX}
+              value={timer.focusMin}
+              onChange={(e) => timer.setFocusMin(Number(e.target.value))}
+            />
+          </label>
+          <label>
+            <Text variant="small">Break min</Text>
+            <input
+              aria-label="Break minutes"
+              type="number"
+              min={1}
+              max={BREAK_MIN_MAX}
+              value={timer.breakMin}
+              onChange={(e) => timer.setBreakMin(Number(e.target.value))}
+            />
+          </label>
+        </div>
+      )}
     </div>
   )
 }

@@ -18,7 +18,7 @@ describe('ClipboardWidget', () => {
   it('shows the quiet empty state with no entries', () => {
     render(<ClipboardWidget />)
     expect(screen.getByRole('status', { name: 'Empty clipboard' })).toBeDefined()
-    expect(screen.getByText('Clipboard is empty')).toBeDefined()
+    expect(screen.getByText('No clipboard history yet')).toBeDefined()
   })
 
   it('renders pinned and recent sections', () => {
@@ -47,7 +47,7 @@ describe('ClipboardWidget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pin recent beta' }))
     const pinned = JSON.parse(window.localStorage.getItem(CLIPBOARD_STORAGE_KEY) ?? '[]')
     expect(pinned).toContainEqual(expect.objectContaining({ id: 'b', isPinned: true }))
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent' }))
     const stored = JSON.parse(window.localStorage.getItem(CLIPBOARD_STORAGE_KEY) ?? '[]')
     expect(stored).toHaveLength(2)
     expect(stored.every((e: ClipboardEntry) => e.isPinned)).toBe(true)
@@ -56,13 +56,13 @@ describe('ClipboardWidget', () => {
   it('hides Clear when the filtered view has no recents', () => {
     seed(ENTRIES)
     render(<ClipboardWidget />)
-    expect(screen.getByRole('button', { name: 'Clear' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Clear recent' })).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Search clipboard' }))
     fireEvent.change(screen.getByLabelText('Filter clipboard'), { target: { value: 'alpha' } })
     expect(screen.getByText('pinned alpha')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear recent' })).toBeNull()
     fireEvent.change(screen.getByLabelText('Filter clipboard'), { target: { value: '' } })
-    expect(screen.getByRole('button', { name: 'Clear' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Clear recent' })).toBeDefined()
   })
 
   it('keeps the entry text and clears the copied flag after a beat', async () => {

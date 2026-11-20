@@ -1,4 +1,7 @@
 import type {
+  DayLocalMethod,
+  DayLocalParams,
+  DayLocalResult,
   MokiApi,
   RpcMethod,
   RpcNotificationName,
@@ -33,4 +36,18 @@ export function onBridge<N extends RpcNotificationName>(
   const bridge = getBridge()
   if (!bridge) return () => {}
   return bridge.on(event, cb)
+}
+
+/* Main-process Day call over `day:call`. Null-safe like the rest of the
+ * bridge: jsdom and broken preloads reject instead of throwing, so widgets
+ * fall back to their quiet local states. */
+export function callDay<M extends DayLocalMethod>(
+  method: M,
+  params?: DayLocalParams<M>
+): Promise<DayLocalResult<M>> {
+  const bridge = getBridge()
+  if (!bridge || typeof bridge.local !== 'function') {
+    return Promise.reject(new Error('no bridge'))
+  }
+  return bridge.local(method, params)
 }

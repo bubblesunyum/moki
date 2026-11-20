@@ -51,7 +51,7 @@ describe('UsageWidget', () => {
   it('renders the three quota rows and the offline note', () => {
     render(<UsageWidget />)
     expect(screen.getByTestId('usage-widget')).toBeDefined()
-    for (const label of ['5-hour', 'Weekly', 'Monthly']) {
+    for (const label of ['5 hours', 'Weekly', 'Monthly']) {
       expect(screen.getByText(label)).toBeDefined()
     }
     expect(screen.getAllByRole('progressbar')).toHaveLength(3)

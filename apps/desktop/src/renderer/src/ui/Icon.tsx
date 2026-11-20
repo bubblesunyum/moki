@@ -2,11 +2,15 @@ import type { LucideProps } from 'lucide-react'
 import {
   Bookmark,
   Calendar,
+  Camera,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
   Code,
+  Copy,
+  Ellipsis,
   ExternalLink,
   FileText,
   Folder,
@@ -21,14 +25,21 @@ import {
   Mic,
   PanelLeft,
   PanelRight,
+  Pause,
+  Pin,
+  Play,
   Plus,
   RotateCw,
   Search,
   ShoppingBag,
+  SkipForward,
   SquareCheck,
   Star,
   Sun,
+  Timer,
+  Trash,
   Users,
+  VolumeX,
   X
 } from 'lucide-react'
 
@@ -65,7 +76,18 @@ export const FIGMA_ICON_MAP = {
   'external-link': ExternalLink,
   plus: Plus,
   star: Star,
-  x: X
+  x: X,
+  trash: Trash,
+  pin: Pin,
+  ellipsis: Ellipsis,
+  play: Play,
+  pause: Pause,
+  check: Check,
+  'skip-forward': SkipForward,
+  timer: Timer,
+  copy: Copy,
+  'volume-x': VolumeX,
+  camera: Camera
 } as const
 
 export type FigmaIconName = keyof typeof FIGMA_ICON_MAP
