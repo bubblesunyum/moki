@@ -34,13 +34,19 @@ function renderLens(): void {
 }
 
 describe('docs fixtures', () => {
-  it('carries 12 rows per source with real http(s) open URLs and ISO dates', () => {
+  it('carries 12 rows per source with contract-shaped open targets', () => {
     for (const source of ['drive', 'notion', 'craft'] as const) {
       const items = DOC_FIXTURES[source]
       expect(items).toHaveLength(12)
       for (const item of items) {
         expect(item.source).toBe(source)
-        expect(item.openUrl).toMatch(/^https:\/\//)
+        if (source === 'craft') {
+          // Craft opens out-of-app: empty openUrl plus a native-app deepLink.
+          expect(item.openUrl).toBe('')
+          expect(item.deepLink).toMatch(/^craftdocs:\/\/open\?/)
+        } else {
+          expect(item.openUrl).toMatch(/^https:\/\//)
+        }
         expect(Number.isNaN(Date.parse(item.updatedAt))).toBe(false)
       }
     }
@@ -55,7 +61,8 @@ describe('docs fixtures', () => {
 
   /* Cross-side contract: the id/title/URL lists below are checked in on
    * both sides (mirror: "fixtureRowsMirrorCanonicalContract" in
-   * DocsRecentsTests.swift). TS and Swift cannot share one fixture file, so
+   * DocsRecentsTests.swift) — Craft rows carry an empty openUrl plus a
+   * craftdocs deepLink, pinned just below. TS and Swift cannot share one fixture file, so
    * a fixture change on either side without the other fails here or there.
    * Change rows in fixtures.ts AND the Swift mirrors together. */
   it('mirrors the canonical contract the helper fixtures pin', () => {
@@ -89,23 +96,32 @@ describe('docs fixtures', () => {
         ['Journal-7c1e6a', 'Journal', 'https://www.notion.so/Journal-7c1e6a']
       ],
       craft: [
-        ['s/launch-checklist-a1b2c3', 'Launch checklist', 'https://www.craft.do/s/launch-checklist-a1b2c3'],
-        ['s/essay-draft-d4e5f6', 'Essay draft', 'https://www.craft.do/s/essay-draft-d4e5f6'],
-        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', 'https://www.craft.do/s/trip-itinerary-g7h8i9'],
-        ['s/reading-notes-j0k1l2', 'Reading notes', 'https://www.craft.do/s/reading-notes-j0k1l2'],
-        ['s/garden-plan-m3n4o5', 'Garden plan', 'https://www.craft.do/s/garden-plan-m3n4o5'],
-        ['s/talk-outline-p6q7r8', 'Talk outline', 'https://www.craft.do/s/talk-outline-p6q7r8'],
-        ['s/budget-review-s9t0u1', 'Budget review', 'https://www.craft.do/s/budget-review-s9t0u1'],
-        ['s/book-club-v2w3x4', 'Book club picks', 'https://www.craft.do/s/book-club-v2w3x4'],
-        ['s/workout-log-y5z6a7', 'Workout log', 'https://www.craft.do/s/workout-log-y5z6a7'],
-        ['s/gift-list-b8c9d0', 'Gift list', 'https://www.craft.do/s/gift-list-b8c9d0'],
-        ['s/home-inventory-e1f2g3', 'Home inventory', 'https://www.craft.do/s/home-inventory-e1f2g3'],
-        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', 'https://www.craft.do/s/ideas-inbox-h4i5j6']
+        ['s/launch-checklist-a1b2c3', 'Launch checklist', ''],
+        ['s/essay-draft-d4e5f6', 'Essay draft', ''],
+        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', ''],
+        ['s/reading-notes-j0k1l2', 'Reading notes', ''],
+        ['s/garden-plan-m3n4o5', 'Garden plan', ''],
+        ['s/talk-outline-p6q7r8', 'Talk outline', ''],
+        ['s/budget-review-s9t0u1', 'Budget review', ''],
+        ['s/book-club-v2w3x4', 'Book club picks', ''],
+        ['s/workout-log-y5z6a7', 'Workout log', ''],
+        ['s/gift-list-b8c9d0', 'Gift list', ''],
+        ['s/home-inventory-e1f2g3', 'Home inventory', ''],
+        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', '']
       ]
     }
     for (const source of ['drive', 'notion', 'craft'] as const) {
       const items = DOC_FIXTURES[source]
       expect(items.map((item) => [item.id, item.title, item.openUrl])).toEqual(canonical[source])
+      if (source === 'craft') {
+        // Craft never loads in the preview guest: empty openUrl plus a
+        // native-app deepLink mirroring the helper's DocsFixtures shape.
+        expect(items.map((item) => item.deepLink)).toEqual(
+          items.map((item) => `craftdocs://open?spaceId=fixture-space&blockId=${item.id}`)
+        )
+      } else {
+        for (const item of items) expect(item.deepLink).toBeUndefined()
+      }
       // Within the last day, newest first — so ?mokiDoc pins and any
       // recency filter hold at any wall-clock time.
       const stamps = items.map((item) => Date.parse(item.updatedAt))
@@ -139,7 +155,7 @@ describe('DocsLens', () => {
   it('a single selection replaces the pane', () => {
     renderLens()
     const first = DOC_FIXTURES.drive[0]
-    const other = DOC_FIXTURES.craft[5]
+    const other = DOC_FIXTURES.notion[5]
     expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(first.openUrl)
     fireEvent.click(screen.getByTestId(`docs-row-${other.id}`))
     expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(other.openUrl)
@@ -148,7 +164,7 @@ describe('DocsLens', () => {
   })
 
   it('preselects ?mokiDoc= for captures', () => {
-    const target = DOC_FIXTURES.craft[2]
+    const target = DOC_FIXTURES.notion[2]
     window.history.replaceState({}, '', `/?mokiDoc=${target.id}`)
     renderLens()
     expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(target.openUrl)
@@ -224,9 +240,11 @@ describe('DocPreview', () => {
   })
 })
 
-/* Signed-out states (mok-8uu.11): every auth state explains itself and
- * offers its real action — honest Drive copy with no fake button, Open
- * Craft loading the home page in the preview, the Notion token explainer. */
+/* Signed-out states (mok-8uu.6/12): every auth state explains itself and
+ * offers its real action — Drive's Google sign-in button, Craft's
+ * connection-URL form, the Notion token explainer. Empty-unreachable Craft
+ * (no credential to fix) keeps Open Craft loading the home page in the
+ * preview. */
 describe('Docs signed-out states', () => {
   function signedOutBridge(signedOutSource: DocSource): void {
     setBridge((_method, params) => {
@@ -239,28 +257,30 @@ describe('Docs signed-out states', () => {
     })
   }
 
-  it('drive is honest with no fake button', async () => {
+  it('drive offers a working Google sign-in', async () => {
     signedOutBridge('drive')
     renderLens()
     await waitFor(() => {
       expect(screen.getByLabelText('Drive needs sign-in')).toBeDefined()
     })
-    expect(screen.getByText('Drive listing needs Google sign-in — not connected yet')).toBeDefined()
+    expect(screen.getByText('Sign in to Google')).toBeDefined()
     expect(screen.getByText('Zen import signs in previews, not the list')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeDefined()
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.drive[0].id}`)).toBeNull()
-    // No action exists yet — no button anywhere in the Drive section.
-    expect(screen.getByTestId('docs-section-drive').querySelector('button')).toBeNull()
   })
 
-  it('craft opens the home page in the preview', async () => {
+  it('craft signed-out shows the connect form, not the preview home', async () => {
     signedOutBridge('craft')
     renderLens()
     await waitFor(() => {
-      expect(screen.getByLabelText('Craft list unavailable')).toBeDefined()
+      expect(screen.getByLabelText('Craft needs sign-in')).toBeDefined()
     })
-    expect(screen.getByText('Craft list isn’t here yet — browse it in the preview')).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Craft' }))
-    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe('https://www.craft.do')
+    expect(screen.getByText('Connect Craft to list docs')).toBeDefined()
+    expect(screen.getByLabelText('Craft connection URL')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Validate' })).toBeDefined()
+    // A credential fix exists — no Open Craft fallback here.
+    expect(screen.queryByRole('button', { name: 'Open Craft' })).toBeNull()
+    expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()
   })
 
   it('craft unreachable with no rows still opens the home page', async () => {

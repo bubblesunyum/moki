@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isExternalHttpUrl } from '../../../../../packages/protocol/src/index'
-import { __test__ } from './ipc'
+import { __test__, isOpenExternalAllowed } from './ipc'
 
 describe('helper ipc', () => {
   it('only allows http(s) URLs for openExternal', () => {
@@ -11,6 +11,18 @@ describe('helper ipc', () => {
     expect(isExternalHttpUrl('ftp://example.com')).toBe(false)
     expect(isExternalHttpUrl(42)).toBe(false)
     expect(isExternalHttpUrl(undefined)).toBe(false)
+  })
+
+  it('also allows Craft deep links for openExternal, nothing else', () => {
+    expect(isOpenExternalAllowed('https://example.com/x')).toBe(true)
+    expect(isOpenExternalAllowed('craftdocs://open?spaceId=abc&blockId=def')).toBe(true)
+    expect(isOpenExternalAllowed('craftdocs://open')).toBe(true)
+    expect(isOpenExternalAllowed('craftdocs://open?spaceId=a+b&blockId=c:d')).toBe(true)
+    expect(isOpenExternalAllowed('craftdocs://open foo')).toBe(false)
+    expect(isOpenExternalAllowed('craftdocs://open\\evil.com')).toBe(false)
+    expect(isOpenExternalAllowed('craftdocs:open')).toBe(false)
+    expect(isOpenExternalAllowed('file:///etc/passwd')).toBe(false)
+    expect(isOpenExternalAllowed('javascript:alert(1)')).toBe(false)
   })
 
   it('exposes the expected channel names', () => {

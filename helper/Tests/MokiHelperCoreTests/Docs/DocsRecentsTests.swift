@@ -465,7 +465,7 @@ struct DocsRecentsTests {
         #expect(result.signedOut == false)
     }
 
-    // MARK: - Craft section (no API yet)
+    // MARK: - Craft section (unwired: no service, partial state)
 
     @Test func craftReportsUnreachableWithoutSignIn() async throws {
         let (home, scratch) = try makeDocsTempHome()
@@ -474,6 +474,26 @@ struct DocsRecentsTests {
         let result = await makeDocsService(home: home).listRecents(source: .craft)
         #expect(result.items.isEmpty)
         #expect(result.unreachable == true)
+        #expect(result.signedOut == false)
+    }
+
+    @Test func craftUsesWiredServiceWhenPresent() async throws {
+        let (home, scratch) = try makeDocsTempHome()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let craft = CraftService(
+            store: CraftCredentialStore(
+                locations: CraftLocations(
+                    credentialURL: home.appendingPathComponent("craft-connection.json"))),
+            session: makeDocsStubSession(), fixtures: true)
+        let service = DocsRecentsService(
+            drive: makeDocsDriveService(home: home), notion: makeDocsNotionService(), craft: craft)
+
+        // Identity mapping: the service's contract rows pass through.
+        let result = await service.listRecents(source: .craft)
+        #expect(result.items.count == 12)
+        #expect(result.items.allSatisfy { $0.source == .craft && $0.openUrl == "" })
+        #expect(result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
+        #expect(result.unreachable == false)
         #expect(result.signedOut == false)
     }
 
@@ -600,13 +620,22 @@ struct DocsRecentsTests {
             #expect(result.items.map(\.id) == canonical.map(\.id), "id drift for \(source)")
             #expect(result.items.map(\.title) == canonical.map(\.title), "title drift for \(source)")
             for item in result.items {
-                let expected: String =
-                    switch source {
-                    case .drive: "https://drive.google.com/file/d/\(item.id)/view"
-                    case .notion: "https://www.notion.so/\(item.id)"
-                    case .craft: "https://www.craft.do/\(item.id)"
-                    }
-                #expect(item.openUrl == expected, "openUrl drift for \(item.id)")
+                switch source {
+                case .drive:
+                    #expect(
+                        item.openUrl == "https://drive.google.com/file/d/\(item.id)/view",
+                        "openUrl drift for \(item.id)")
+                case .notion:
+                    #expect(
+                        item.openUrl == "https://www.notion.so/\(item.id)",
+                        "openUrl drift for \(item.id)")
+                case .craft:
+                    #expect(item.openUrl == "", "Craft never loads in the preview guest")
+                    #expect(
+                        item.deepLink
+                            == "craftdocs://open?spaceId=fixture-space&blockId=\(item.id)",
+                        "deepLink drift for \(item.id)")
+                }
             }
             // Within the last day, newest first — so ?mokiDoc pins and any
             // recency filter hold under MOKI_FIXTURES=1 at any wall-clock time.
@@ -622,16 +651,27 @@ struct DocsRecentsTests {
         }
     }
 
-    @Test func fixtureHandlerServesTwelveHttpsRowsPerSource() async throws {
+    @Test func fixtureHandlerServesTwelveContractRowsPerSource() async throws {
         await NotionFixtureAuthState.shared.reset()
         let handler = fixtureDocsListRecentsHandler()
         for source in [DocSource.drive, .notion, .craft] as [DocSource] {
             let result = try await handler(.object(["source": .string(source.rawValue)]))
             #expect(result.items.count == 12, "expected 12 rows for \(source)")
             #expect(result.items.allSatisfy { $0.source == source }, "wrong source for \(source)")
-            #expect(
-                result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
-                "non-https openUrl for \(source)")
+            if source == .craft {
+                // Craft opens out-of-app: empty openUrl plus a native-app
+                // deepLink on every row.
+                #expect(
+                    result.items.allSatisfy { $0.openUrl == "" },
+                    "Craft rows never load in the preview guest")
+                #expect(
+                    result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") },
+                    "non-craftdocs deepLink for \(source)")
+            } else {
+                #expect(
+                    result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
+                    "non-https openUrl for \(source)")
+            }
             #expect(result.unreachable == false)
             #expect(result.signedOut == false)
         }

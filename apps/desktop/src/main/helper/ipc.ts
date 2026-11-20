@@ -20,10 +20,25 @@ function broadcast(
 }
 
 /**
+ * Whether a URL may leave the app via openExternal: http(s) pages, plus the
+ * Craft native-app deep link (`craftdocs://open?spaceId=&blockId=` — the
+ * API's own clickableLink shape, confirmed live in CCP). The craftdocs
+ * pattern mirrors what `URLComponents` can emit in a query (its query-allowed
+ * set leaves `+` and `:` literal), minus whitespace, backslashes and `@` —
+ * so userinfo tricks and smuggled separators never pass. Everything else
+ * stays blocked.
+ */
+export function isOpenExternalAllowed(url: unknown): url is string {
+  if (typeof url !== 'string') return false
+  if (isExternalHttpUrl(url)) return true
+  return /^craftdocs:\/\/[A-Za-z0-9/?&=_.%+:\-]+$/.test(url)
+}
+
+/**
  * Wire the helper to the renderer: `rpc` forwards calls, helper
  * notifications fan out over `rpc:notify`, `helper.status` is translated
- * from the process status, and `shell:openExternal` opens http(s) URLs
- * after validating the scheme.
+ * from the process status, and `shell:openExternal` opens allowed URLs
+ * (http(s) plus Craft deep links) after validating the scheme.
  */
 export function setupHelperIpc(
   ipcMain: IpcMain,
@@ -36,8 +51,8 @@ export function setupHelperIpc(
   })
 
   ipcMain.handle(OPEN_EXTERNAL_CHANNEL, async (_event, url: unknown) => {
-    if (!isExternalHttpUrl(url)) {
-      throw new Error('blocked non-http(s) URL')
+    if (!isOpenExternalAllowed(url)) {
+      throw new Error('blocked URL')
     }
     return shell.openExternal(url)
   })

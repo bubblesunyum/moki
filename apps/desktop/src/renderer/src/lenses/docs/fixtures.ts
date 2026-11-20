@@ -33,7 +33,14 @@ function notion(id: string, title: string, minutesAgo: number): DocItem {
 }
 
 function craft(id: string, title: string, minutesAgo: number): DocItem {
-  return { id, title, source: 'craft', updatedAt: at(minutesAgo), openUrl: `https://www.craft.do/${id}` }
+  return {
+    id,
+    title,
+    source: 'craft',
+    updatedAt: at(minutesAgo),
+    openUrl: '',
+    deepLink: `craftdocs://open?spaceId=fixture-space&blockId=${id}`
+  }
 }
 
 export const DOC_SOURCES: DocSource[] = ['drive', 'notion', 'craft']
@@ -42,6 +49,13 @@ export const DOC_SOURCE_LABEL: Record<DocSource, string> = {
   drive: 'Drive',
   notion: 'Notion',
   craft: 'Craft'
+}
+
+/* Preview rule shared by the lens: a row previews in the right pane only
+ * when it carries an in-pane URL. Craft live rows (empty openUrl plus a
+ * craftdocs:// deepLink) open out-of-app and never touch the selection. */
+export function isPreviewable(doc: DocItem): boolean {
+  return doc.openUrl !== ''
 }
 
 export const DOC_FIXTURES: Record<DocSource, DocItem[]> = {

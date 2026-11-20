@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { DocItem, DocSource } from '../../../../../../../packages/protocol/src/index'
 import { GlassPane, Icon, QuietButton, QuietState, Text } from '../../ui'
 import { formatListDate } from '../mail/formatListDate'
 import { DocPreview } from './DocPreview'
-import { DOC_SOURCES, DOC_SOURCE_LABEL } from './fixtures'
+import { DOC_SOURCES, DOC_SOURCE_LABEL, isPreviewable } from './fixtures'
 import { useDocsRecents, type DocsRecents } from './useDocsRecents'
-import { getBridge } from '../../rpc/bridge'
+import { callBridge, getBridge } from '../../rpc/bridge'
 import { ZenImportControl } from './ZenImportControl'
-import { NotionSignedOutExplainer, NotionSignOutButton } from './NotionAuth'
+import { NotionSignedOutExplainer } from './NotionAuth'
+import { GoogleSignInControl } from './GoogleAuth'
+import { CraftConnectForm } from './CraftAuth'
 import '../mail/InboxLayout.css'
 import './DocsLens.css'
 
@@ -16,12 +19,13 @@ function queryParam(name: string): string | undefined {
   return raw === null || raw === undefined || raw === '' ? undefined : raw
 }
 
-/* Synthetic Craft home selection (mok-8uu.11): the Craft listing API is
- * still pending (mok-8uu.6), so signed-out and empty-unreachable states
- * offer Open Craft, which selects this doc and loads the Craft home page
- * in the preview pane for sign-in and browsing. Presentation, not contract
- * data — it lives here, not in fixtures.ts, and never appears in any
- * section's items (resolved by id outside `all`). */
+/* Synthetic Craft home selection (mok-8uu.11/8uu.6): empty-unreachable
+ * Craft (no credential to fix) offers Open Craft, which selects this doc
+ * and loads the Craft home page in the preview pane for browsing.
+ * Presentation, not contract data — it lives here, not in fixtures.ts,
+ * and never appears in any section's items (resolved by id outside
+ * `all`). Signed-out Craft instead shows the connect form; live Craft
+ * rows carry deepLinks and open externally, never in the preview. */
 const CRAFT_HOME_DOC: DocItem = {
   id: 'craft-home',
   title: 'Craft',
@@ -36,6 +40,62 @@ function OpenCraftAction({ onSelect }: { onSelect: (doc: DocItem) => void }): Re
       Open Craft
     </QuietButton>
   )
+}
+
+/* Shared sign-out affordance for the signed-in notion/craft sections: one
+ * button, one optimistic empty-section flip, one failure one-liner. The
+ * two sources differ only in method and query key, carried as props. */
+export function DocsSignOutButton({
+  source,
+  method
+}: {
+  source: DocSource
+  method: 'notion.signOut' | 'craftConnect.signOut'
+}): React.JSX.Element {
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  async function signOut(): Promise<void> {
+    if (busy) return
+    setBusy(true)
+    setFailed(false)
+    try {
+      await callBridge(method)
+      queryClient.setQueryData(['rpc', 'docs.listRecents', { source }], {
+        items: [],
+        signedOut: true,
+        unreachable: false
+      })
+      await queryClient.invalidateQueries({ queryKey: ['rpc', 'docs.listRecents'] })
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <span className="moki-docs-signout">
+      <QuietButton type="button" onClick={() => void signOut()} disabled={busy}>
+        {busy ? 'Signing out…' : 'Sign out'}
+      </QuietButton>
+      {failed && (
+        <Text variant="small" as="span" role="status">
+          Couldn't sign out
+        </Text>
+      )}
+    </span>
+  )
+}
+
+/* Signed-in sign-out affordance per source: Drive has none (its credential
+ * lives in the Google flow alone), notion/craft share one button. Looked
+ * up once in the section head behind showSignOut. */
+const SIGN_OUT_AFFORDANCE: Record<DocSource, React.JSX.Element | null> = {
+  drive: null,
+  notion: <DocsSignOutButton source="notion" method="notion.signOut" />,
+  craft: <DocsSignOutButton source="craft" method="craftConnect.signOut" />
 }
 
 /* Capture override (dev only, via ?mokiDoc= on the startup URL): preselects
@@ -101,13 +161,16 @@ function DocSection({
   selectedId: string | null
   onSelect: (doc: DocItem) => void
 }): React.JSX.Element {
-  /* Notion carries its own auth affordances: the token form in the
-   * signed-out state, a sign-out button beside the title once signed in.
-   * Both need the bridge; fixture mode (plain browser, captures) stays
-   * clean without them. */
+  /* Notion and Craft carry their own auth affordances: the token /
+   * connect form in the signed-out state, a sign-out button beside the
+   * title once signed in. Both need the bridge; fixture mode (plain
+   * browser, captures) stays clean without them. */
   const hasBridge = getBridge() !== null
   const showSignOut =
-    source === 'notion' && hasBridge && query.status !== 'loading' && query.status !== 'signed-out'
+    (source === 'notion' || source === 'craft') &&
+    hasBridge &&
+    query.status !== 'loading' &&
+    query.status !== 'signed-out'
   if (query.status === 'loading') {
     return (
       <section className="moki-docs-section" data-testid={`docs-section-${source}`} aria-label={DOC_SOURCE_LABEL[source]}>
@@ -137,8 +200,9 @@ function DocSection({
             <>
               <QuietState
                 icon="notes"
-                text="Drive listing needs Google sign-in — not connected yet"
+                text="Sign in to Google"
                 label="Drive needs sign-in"
+                action={<GoogleSignInControl />}
               />
               <Text variant="small" tone="muted" as="p" className="moki-docs-auth-note">
                 Zen import signs in previews, not the list
@@ -146,12 +210,12 @@ function DocSection({
             </>
           )}
           {source === 'craft' && (
-            <QuietState
-              icon="notes"
-              text="Craft list isn’t here yet — browse it in the preview"
-              label="Craft list unavailable"
-              action={<OpenCraftAction onSelect={onSelect} />}
-            />
+            <>
+              <QuietState icon="notes" text="Connect Craft to list docs" label="Craft needs sign-in" />
+              <div className="moki-docs-auth">
+                <CraftConnectForm />
+              </div>
+            </>
           )}
           {source === 'notion' && (
             <>
@@ -181,8 +245,13 @@ function DocSection({
         <Text variant="small" className="moki-docs-section-title" tone="muted">
           {DOC_SOURCE_LABEL[source]}
         </Text>
-        {showSignOut && <NotionSignOutButton />}
+        {showSignOut ? SIGN_OUT_AFFORDANCE[source] : null}
       </div>
+      {source === 'craft' && query.items.length > 0 && (
+        <Text variant="small" tone="muted" as="p" className="moki-docs-craft-note">
+          In space order
+        </Text>
+      )}
       {query.items.map((doc) => (
         <DocRow key={doc.id} doc={doc} selected={doc.id === selectedId} onSelect={onSelect} />
       ))}
@@ -197,9 +266,11 @@ function DocSection({
 }
 
 /* Docs lens: three stacked sections (Drive, Notion, Craft) beside the
- * preview pane, mirroring the Messages 2-up. One selection across all
- * sections replaces the right pane per click; fixtures carry the UX until
- * the helper lands live listing (mok-8uu.3/4/6). */
+ * preview pane, mirroring the Messages 2-up. One selection across the
+ * previewable rows (openUrl non-empty) replaces the right pane per click;
+ * Craft deep-link rows open in the native app via openExternal and never
+ * touch the selection. Fixtures carry the UX until the helper lands live
+ * listing (mok-8uu.3/4/6). */
 export function DocsLens(): React.JSX.Element {
   const drive = useDocsRecents('drive')
   const notion = useDocsRecents('notion')
@@ -216,6 +287,10 @@ export function DocsLens(): React.JSX.Element {
     return DOC_SOURCES.map((source) => ({ source, query: bySource[source] }))
   }, [drive, notion, craft])
   const all = useMemo(() => sections.flatMap(({ query }) => query.items), [sections])
+  /* Preview-eligible rows only: Craft live rows carry openUrl:'' plus a
+   * craftdocs:// deepLink and open out-of-app, so they never auto-select
+   * or resolve as the preview doc. */
+  const previewable = useMemo(() => all.filter(isPreviewable), [all])
 
   /* A picked row that vanishes (signed-out, refetch) clears the selection —
    * the preview goes empty rather than swapping unprompted. The synthetic
@@ -229,12 +304,26 @@ export function DocsLens(): React.JSX.Element {
 
   const selected: DocItem | null = useMemo(() => {
     if (selectedId === CRAFT_HOME_DOC.id) return CRAFT_HOME_DOC
-    if (selectedId !== null) return all.find((doc) => doc.id === selectedId) ?? null
+    if (selectedId !== null) return previewable.find((doc) => doc.id === selectedId) ?? null
     if (hasPicked) return null
-    if (all.length === 0) return null
-    if (preference !== undefined) return all.find((doc) => doc.id === preference) ?? all[0]
-    return all[0]
-  }, [all, selectedId, preference, hasPicked])
+    if (previewable.length === 0) return null
+    if (preference !== undefined)
+      return previewable.find((doc) => doc.id === preference) ?? previewable[0]
+    return previewable[0]
+  }, [previewable, selectedId, preference, hasPicked])
+
+  function handleSelect(doc: DocItem): void {
+    /* Deep-link rows (Craft native-app open) never touch the selection —
+     * they open externally and the preview stays where it was. */
+    if (!isPreviewable(doc)) {
+      if (doc.deepLink) {
+        getBridge()?.openExternal(doc.deepLink).catch(() => undefined)
+      }
+      return
+    }
+    setSelectedId(doc.id)
+    setHasPicked(true)
+  }
 
   return (
     <div className="moki-inbox-lens">
@@ -246,10 +335,7 @@ export function DocsLens(): React.JSX.Element {
             source={source}
             query={query}
             selectedId={selected?.id ?? null}
-            onSelect={(doc) => {
-              setSelectedId(doc.id)
-              setHasPicked(true)
-            }}
+            onSelect={handleSelect}
           />
         ))}
       </GlassPane>

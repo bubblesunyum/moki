@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { DocSource } from '../../../../../../../packages/protocol/src/index'
 import { RpcProvider } from '../../rpc/provider'
 import { DOC_FIXTURES } from './fixtures'
@@ -111,9 +111,13 @@ describe('Docs Notion auth', () => {
     })
     renderLens()
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined()
+      expect(
+        within(screen.getByTestId('docs-section-notion')).getByRole('button', { name: 'Sign out' })
+      ).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    fireEvent.click(
+      within(screen.getByTestId('docs-section-notion')).getByRole('button', { name: 'Sign out' })
+    )
     await waitFor(() => {
       expect(signedOut).toHaveLength(1)
     })
@@ -131,9 +135,13 @@ describe('Docs Notion auth', () => {
     })
     renderLens()
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined()
+      expect(
+        within(screen.getByTestId('docs-section-notion')).getByRole('button', { name: 'Sign out' })
+      ).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    fireEvent.click(
+      within(screen.getByTestId('docs-section-notion')).getByRole('button', { name: 'Sign out' })
+    )
     await waitFor(() => {
       expect(screen.getByText("Couldn't sign out")).toBeDefined()
     })

@@ -52,9 +52,17 @@
 }
 
 /* Quiet follow-up line under a signed-out state (Drive's Zen note, the
- * Notion token explainer). Muted small text at the section inset. */
+ * Notion token explainer, the Craft space-order note). Muted small text at
+ * the section inset. */
 .moki-docs-auth-note {
   margin: var(--moki-space-8) 0 0;
+}
+
+/* Craft section honesty line (space order, not recent): same inset as the
+ * rows, tighter to the head. */
+.moki-docs-craft-note {
+  margin: 0;
+  padding: 0 var(--moki-space-12);
 }
 
 /* Inline external link inside quiet copy: accent-cyan underline on the

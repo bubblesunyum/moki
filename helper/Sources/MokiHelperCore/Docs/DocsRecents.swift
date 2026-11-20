@@ -8,8 +8,9 @@ import Foundation
 // method names (`docs.listDrive`, `notion.listRecents`) with different
 // shapes, so the live renderer path always errored into fixture-partial.
 // This dispatcher unifies them: Drive reuses `DriveService.listFiles`,
-// Notion reuses `NotionService.listRecents`, Craft has no API yet (see
-// mok-8uu.6 spike) and reports `unreachable`.
+// Notion reuses `NotionService.listRecents`, Craft reuses the Connect API's
+// `CraftService.listRecents` when a service is wired in — without one the
+// arm reports `unreachable`.
 //
 // Tokens never leave the helper: the Notion integration token stays in the
 // Keychain behind `NotionService`, and only rows + status cross the RPC
@@ -44,10 +45,12 @@ public struct DocsListRecentsResult: Codable, Sendable, Equatable {
 public struct DocsRecentsService: Sendable {
     private let drive: DriveService
     private let notion: NotionService
+    private let craft: CraftService?
 
-    public init(drive: DriveService, notion: NotionService) {
+    public init(drive: DriveService, notion: NotionService, craft: CraftService? = nil) {
         self.drive = drive
         self.notion = notion
+        self.craft = craft
     }
 
     /// Serve one section. Never throws: every failure mode lands in the
@@ -60,8 +63,13 @@ public struct DocsRecentsService: Sendable {
         case .notion:
             return await notionRecents()
         case .craft:
-            // No Craft API yet (see mok-8uu.6 spike): report unreachable so
-            // the section shows its partial state instead of fake rows.
+            // Served by the Craft Connect API when a service is wired in
+            // (rows are already `DocItem`s — identity, no mapping).
+            // Without one the section shows its partial state instead of
+            // fake rows.
+            if let craft {
+                return await craft.listRecents()
+            }
             return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
         }
     }
@@ -133,9 +141,10 @@ public func docsListRecentsHandler(service: DocsRecentsService) -> @Sendable (JS
 }
 
 /// Canned per-source rows for `MOKI_FIXTURES=1`: no network, no Keychain
-/// touch. Drive and Notion mirror the existing fixture builders; Craft gets
-/// 12 canned rows (mirroring the renderer's `DOC_FIXTURES` craft section)
-/// so the lens shell shows content before the mok-8uu.6 spike lands an API.
+/// touch. Drive and Notion mirror the existing fixture builders; Craft
+/// serves the canonical `DocsFixtures` table (same `s/…` rows the wired
+/// `CraftService` serves under fixtures) so pins and byte-agreement hold
+/// on every path.
 public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throws -> DocsListRecentsResult {
     return { params in
         let request = try decodeRpcParams(params, as: DocsListRecentsParams.self)
@@ -165,15 +174,19 @@ public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throw
 // MARK: - Fixtures
 
 public enum DocsFixtures {
-    /// 12 canned Craft rows (no API yet): titles mirror the renderer's
-    /// `DOC_FIXTURES` craft section; every URL is an absolute https URL so
-    /// the right-pane preview loads.
+    /// 12 canned Craft rows: ids/titles mirror the renderer's
+    /// `DOC_FIXTURES` craft section. Contract-shaped rows — `openUrl` empty
+    /// (Craft never loads in the preview guest), `deepLink` the native-app
+    /// target — so the lens shell shows content while live listing needs a
+    /// credential.
     ///
     /// Canonical mirror: ids/titles match lenses/docs/fixtures.ts row-for-row
     /// (see its header for the cross-side contract). updatedAt is generated
     /// relative to now with the same minutes-ago offsets, so ?mokiDoc pins
     /// and "within last day" hold under MOKI_FIXTURES=1 at any wall-clock
-    /// time.
+    /// time. The deepLink is a literal interpolation (not URLComponents):
+    /// fixture ids carry `/`, which is legal unencoded in a query string,
+    /// and both sides must byte-agree.
     public static func craftRecents(now: Date = Date()) -> [DocItem] {
         let seeds: [(id: String, title: String, minutesAgo: Double)] = [
             ("s/launch-checklist-a1b2c3", "Launch checklist", 35),
@@ -193,7 +206,8 @@ public enum DocsFixtures {
             DocItem(
                 id: $0.id, title: $0.title, source: .craft,
                 updatedAt: iso8601String(now.addingTimeInterval(-$0.minutesAgo * 60)),
-                openUrl: "https://www.craft.do/\($0.id)")
+                openUrl: "",
+                deepLink: "craftdocs://open?spaceId=fixture-space&blockId=\($0.id)")
         }
     }
 }
