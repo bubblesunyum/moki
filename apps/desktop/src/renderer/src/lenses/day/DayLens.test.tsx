@@ -19,54 +19,60 @@ function widgetOrder(): string[] {
 }
 
 describe('DayLens', () => {
-  it('renders the header, timeline and widget grid', () => {
+  it('renders the range control, hero, timeline and widget grid', () => {
     render(<DayLens />)
     expect(screen.getByTestId('day-lens')).toBeDefined()
-    // Header: today's weekday + live clock region.
+    // Range control above the hero.
+    expect(screen.getByRole('radiogroup', { name: 'Day range' })).toBeDefined()
+    for (const name of ['Today', 'Tomorrow', 'Week']) {
+      expect(screen.getByRole('radio', { name })).toBeDefined()
+    }
+    // Hero: today's weekday + live clock in the ring.
     const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     expect(screen.getByRole('heading', { name: new RegExp(weekday) })).toBeDefined()
+    expect(screen.getByTestId('day-hero')).toBeDefined()
     // Timeline with the fixture events.
     expect(screen.getByTestId('day-timeline')).toBeDefined()
     for (const title of ['Standup', 'QWELL', 'Lunch', 'Physio', 'Garden']) {
       expect(screen.getByTitle(new RegExp(title))).toBeDefined()
     }
-    // Board with the registered sample widgets.
-    expect(widgetOrder()).toEqual(['up-next', 'focus'])
+    // Board with the Focus sample tile; Up next is gone.
+    expect(widgetOrder()).toEqual(['focus'])
+    expect(screen.queryByTestId('day-widget-up-next')).toBeNull()
   })
 
-  it('drags a widget past its neighbour so the other displaces', () => {
+  it('switches the header date across the range control', () => {
     render(<DayLens />)
-    expect(widgetOrder()).toEqual(['up-next', 'focus'])
-    const [first, second] = screen.getAllByTestId(/day-widget-/, { exact: false })
-    fireEvent.dragStart(first)
-    // jsdom rects are zero-sized, so any positive clientX reads as "after".
-    fireEvent.dragOver(second, { clientX: 100 })
-    fireEvent.drop(second)
-    expect(widgetOrder()).toEqual(['focus', 'up-next'])
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const weekday = tomorrow.toLocaleDateString('en-US', { weekday: 'long' })
+    fireEvent.click(screen.getByRole('radio', { name: 'Tomorrow' }))
+    expect(screen.getByRole('heading', { name: new RegExp(weekday) })).toBeDefined()
+    fireEvent.click(screen.getByRole('radio', { name: 'Week' }))
+    expect(screen.getByRole('heading', { name: 'Week' })).toBeDefined()
   })
 
   it('restores the persisted layout on reload', () => {
     const { unmount } = render(<DayLens />)
-    const [first, second] = screen.getAllByTestId(/day-widget-/, { exact: false })
-    fireEvent.dragStart(first)
-    fireEvent.dragOver(second, { clientX: 100 })
-    fireEvent.drop(second)
-    expect(widgetOrder()).toEqual(['focus', 'up-next'])
+    const handle = screen.getByRole('slider', { name: 'Resize Focus' })
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('11')
     expect(window.localStorage.getItem(DAY_LAYOUT_STORAGE_KEY)).toContain('focus')
 
     act(() => {
       unmount()
     })
     render(<DayLens />)
-    expect(widgetOrder()).toEqual(['focus', 'up-next'])
+    expect(widgetOrder()).toEqual(['focus'])
+    expect(screen.getByRole('slider', { name: 'Resize Focus' }).getAttribute('aria-valuenow')).toBe('11')
   })
 
-  it('resizes a widget with the keyboard handle', () => {
+  it('resizes the tile with the keyboard handle', () => {
     render(<DayLens />)
-    const handle = screen.getByRole('slider', { name: 'Resize Up next' })
-    expect(handle.getAttribute('aria-valuenow')).toBe('7')
-    fireEvent.keyDown(handle, { key: 'ArrowRight' })
-    expect(handle.getAttribute('aria-valuenow')).toBe('8')
-    expect(screen.getByTestId('day-widget-up-next').style.gridColumn).toBe('span 8')
+    const handle = screen.getByRole('slider', { name: 'Resize Focus' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('12')
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('11')
+    expect(screen.getByTestId('day-widget-focus').style.gridColumn).toBe('span 11')
   })
 })

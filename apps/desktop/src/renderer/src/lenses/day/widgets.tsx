@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react'
 import type { FigmaIconName } from '../../ui'
 import type { DayEvent } from './dayEvents'
-import { UpNextWidget } from './widgets/UpNextWidget'
 import { FocusWidget } from './widgets/FocusWidget'
 
 /* Widget registry: every board tile is an entry here with a default span
@@ -21,8 +20,7 @@ export interface DayWidgetDef {
 }
 
 export const DAY_WIDGETS: DayWidgetDef[] = [
-  { id: 'up-next', title: 'Up next', icon: 'calendar', defaultSpan: 7, Component: UpNextWidget },
-  { id: 'focus', title: 'Focus', icon: 'tasks', defaultSpan: 5, Component: FocusWidget }
+  { id: 'focus', title: 'Focus', icon: 'tasks', defaultSpan: 12, Component: FocusWidget }
 ]
 
 export function dayWidgetById(id: string): DayWidgetDef | undefined {

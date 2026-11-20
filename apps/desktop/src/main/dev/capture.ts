@@ -5,6 +5,7 @@ export interface CaptureSelection {
   threadId: string | undefined
   segment: string | undefined
   lens: string | undefined
+  range: string | undefined
 }
 
 function trimToUndefined(value: string | undefined): string | undefined {
@@ -14,14 +15,16 @@ function trimToUndefined(value: string | undefined): string | undefined {
 
 /* Dev-only capture selection: MOKI_THREAD=<thread id> opens that thread
  * instead of the first row; MOKI_SEGMENT=<email|text|...> opens that
- * Messages segment; MOKI_LENS=<lens id> opens that lens (e.g. day).
+ * Messages segment; MOKI_LENS=<lens id> opens that lens (e.g. day);
+ * MOKI_DAY_RANGE=<today|tomorrow|week> opens that Day range.
  * Unset behaves exactly as today; unknown values fall back in the renderer
  * with a console warning, never a blank pane. */
 export function captureSelectionFromEnv(env: NodeJS.ProcessEnv = process.env): CaptureSelection {
   return {
     threadId: trimToUndefined(env['MOKI_THREAD']),
     segment: trimToUndefined(env['MOKI_SEGMENT']),
-    lens: trimToUndefined(env['MOKI_LENS'])
+    lens: trimToUndefined(env['MOKI_LENS']),
+    range: trimToUndefined(env['MOKI_DAY_RANGE'])
   }
 }
 
@@ -32,7 +35,8 @@ export function withCaptureSelection(url: string, selection: CaptureSelection): 
   if (
     selection.threadId === undefined &&
     selection.segment === undefined &&
-    selection.lens === undefined
+    selection.lens === undefined &&
+    selection.range === undefined
   )
     return url
   try {
@@ -40,6 +44,7 @@ export function withCaptureSelection(url: string, selection: CaptureSelection): 
     if (selection.threadId !== undefined) parsed.searchParams.set('mokiThread', selection.threadId)
     if (selection.segment !== undefined) parsed.searchParams.set('mokiSegment', selection.segment)
     if (selection.lens !== undefined) parsed.searchParams.set('mokiLens', selection.lens)
+    if (selection.range !== undefined) parsed.searchParams.set('mokiRange', selection.range)
     return parsed.toString()
   } catch {
     return url
@@ -53,6 +58,7 @@ export function captureSelectionQuery(selection: CaptureSelection): Record<strin
   if (selection.threadId !== undefined) query['mokiThread'] = selection.threadId
   if (selection.segment !== undefined) query['mokiSegment'] = selection.segment
   if (selection.lens !== undefined) query['mokiLens'] = selection.lens
+  if (selection.range !== undefined) query['mokiRange'] = selection.range
   return query
 }
 

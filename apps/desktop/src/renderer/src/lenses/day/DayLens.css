@@ -1,5 +1,7 @@
-/* Day lens: header, horizontal timeline, widget board. All color and
- * spacing from ui/tokens.css — no raw values here. */
+/* Day lens: hero (ring + titles, directly on the backdrop) and the Path
+ * card (glass timeline with progress fill, event dots, stems and alternating
+ * pills; week mode stacks seven single-day lanes). All color and spacing
+ * from ui/tokens.css — no raw values here. */
 
 .moki-day-lens {
   flex: 1;
@@ -12,75 +14,336 @@
   padding: var(--moki-space-12);
 }
 
-.moki-day-header {
+.moki-day-range {
   display: flex;
-  align-items: baseline;
-  gap: var(--moki-space-8);
+  justify-content: flex-start;
 }
 
-.moki-day-header-date {
-  margin: 0;
+/* Hero: ring, gradient weekday and date sub sit directly on the backdrop,
+ * like the Figma — only the Path timeline below is a glass card. */
+.moki-day-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-24);
+  padding: var(--moki-space-12) var(--moki-space-24);
 }
 
-.moki-day-timeline {
+.moki-day-ring {
+  position: relative;
+  width: 164px;
+  height: 164px;
   flex: none;
 }
 
-.moki-day-timeline-track {
-  position: relative;
-  height: 88px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-bottom: 1px solid var(--moki-divider-line);
+.moki-day-ring svg {
+  display: block;
 }
 
-.moki-day-timeline-tick {
+.moki-day-ring-track {
+  stroke: var(--moki-divider-line);
+}
+
+.moki-day-ring-tip {
+  fill: var(--moki-color-ink);
+  filter: drop-shadow(0 0 6px var(--moki-accent-cyan));
+}
+
+.moki-day-ring .moki-day-ring-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: normal;
+}
+
+.moki-day-hero-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  min-width: 0;
+}
+
+.moki-day-hero-weekday {
+  margin: 0;
+  font-family: var(--moki-font);
+  font-size: 48px;
+  font-weight: 700;
+  line-height: normal;
+  text-transform: capitalize;
+  background: linear-gradient(180deg, var(--moki-color-ink), var(--moki-accent-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.moki-day-hero-sub {
+  margin: 0;
+  font-family: var(--moki-font);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: normal;
+  color: var(--moki-color-muted);
+}
+
+/* Path card: glass timeline with progress fill and alternating pills. */
+.moki-day-path {
+  flex: none;
+  background: var(--moki-glass-fill);
+  border: var(--moki-glass-edge);
+  border-radius: var(--moki-radius-card);
+  box-shadow: var(--moki-glass-shadow);
+  backdrop-filter: blur(var(--moki-glass-blur));
+  padding: var(--moki-space-24);
+}
+
+.moki-day-path-track {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+}
+
+.moki-day-path-base,
+.moki-day-path-fill {
+  position: absolute;
+  top: 68px;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.moki-day-path-base {
+  width: 100%;
+  background: var(--moki-quiet-fill);
+}
+
+.moki-day-path-fill {
+  background: linear-gradient(90deg, var(--moki-accent-violet), var(--moki-accent-cyan));
+  box-shadow: 0 0 12px var(--moki-accent-cyan);
+}
+
+.moki-day-path-event {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--moki-divider-line);
-  padding-left: var(--moki-space-4);
-  pointer-events: none;
+  width: 0;
 }
 
-.moki-day-timeline-pill {
+.moki-day-path-dot {
   position: absolute;
-  top: 28px;
-  height: 32px;
-  /* Short events still get a readable nub: the title ellipsizes, and the
-   * full text rides in the title attr. */
-  min-width: 96px;
+  top: 64px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.moki-day-path-stem {
+  position: absolute;
+  left: -0.5px;
+  width: 1px;
+  height: 18px;
+}
+
+.moki-day-path-stem.is-above {
+  top: 50px;
+}
+
+.moki-day-path-stem:not(.is-above) {
+  top: 70px;
+}
+
+.moki-day-path-pill {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  padding: 0 var(--moki-space-8);
+  gap: var(--moki-space-8);
+  height: 32px;
+  max-width: 220px;
+  padding: 0 var(--moki-space-12);
   overflow: hidden;
+  white-space: nowrap;
   background: var(--moki-quiet-fill);
   border: 1px solid var(--moki-divider-line);
   border-radius: var(--moki-radius-pill);
-  white-space: nowrap;
 }
 
-.moki-day-timeline-pill-text {
-  flex: 1;
+.moki-day-path-pill.is-above {
+  top: 18px;
+}
+
+.moki-day-path-pill:not(.is-above) {
+  top: 88px;
+}
+
+.moki-day-path-pill .moki-day-path-pill-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: normal;
+  color: var(--moki-color-ink);
 }
 
-.moki-day-timeline-now {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
+.moki-day-path-pill .moki-day-path-pill-time {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: normal;
+}
+
+/* Per-event accent: tinted border and glow on the dot, stem and pill. */
+.moki-day-path-event[data-accent='violet'] .moki-day-path-dot,
+.moki-day-path-event[data-accent='violet'] .moki-day-path-stem {
+  background: var(--moki-accent-violet);
+  box-shadow: 0 0 8px var(--moki-accent-violet);
+}
+
+.moki-day-path-event[data-accent='coral'] .moki-day-path-dot,
+.moki-day-path-event[data-accent='coral'] .moki-day-path-stem {
+  background: var(--moki-accent-coral);
+  box-shadow: 0 0 8px var(--moki-accent-coral);
+}
+
+.moki-day-path-event[data-accent='mint'] .moki-day-path-dot,
+.moki-day-path-event[data-accent='mint'] .moki-day-path-stem {
+  background: var(--moki-accent-mint);
+  box-shadow: 0 0 8px var(--moki-accent-mint);
+}
+
+.moki-day-path-event[data-accent='amber'] .moki-day-path-dot,
+.moki-day-path-event[data-accent='amber'] .moki-day-path-stem {
+  background: var(--moki-accent-amber);
+  box-shadow: 0 0 8px var(--moki-accent-amber);
+}
+
+.moki-day-path-event[data-accent='cyan'] .moki-day-path-dot,
+.moki-day-path-event[data-accent='cyan'] .moki-day-path-stem {
   background: var(--moki-accent-cyan);
+  box-shadow: 0 0 8px var(--moki-accent-cyan);
+}
+
+.moki-day-path-event[data-accent='violet'] .moki-day-path-pill {
+  border-color: var(--moki-accent-violet);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--moki-accent-violet) 22%, transparent),
+    color-mix(in srgb, var(--moki-accent-violet) 5%, transparent)
+  );
+}
+
+.moki-day-path-event[data-accent='coral'] .moki-day-path-pill {
+  border-color: var(--moki-accent-coral);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--moki-accent-coral) 22%, transparent),
+    color-mix(in srgb, var(--moki-accent-coral) 5%, transparent)
+  );
+}
+
+.moki-day-path-event[data-accent='mint'] .moki-day-path-pill {
+  border-color: var(--moki-accent-mint);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--moki-accent-mint) 22%, transparent),
+    color-mix(in srgb, var(--moki-accent-mint) 5%, transparent)
+  );
+}
+
+.moki-day-path-event[data-accent='amber'] .moki-day-path-pill {
+  border-color: var(--moki-accent-amber);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--moki-accent-amber) 22%, transparent),
+    color-mix(in srgb, var(--moki-accent-amber) 5%, transparent)
+  );
+}
+
+.moki-day-path-event[data-accent='cyan'] .moki-day-path-pill {
+  border-color: var(--moki-accent-cyan);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--moki-accent-cyan) 22%, transparent),
+    color-mix(in srgb, var(--moki-accent-cyan) 5%, transparent)
+  );
+}
+
+.moki-day-path-event[data-accent='violet'] .moki-day-path-pill-time {
+  color: var(--moki-accent-violet);
+}
+
+.moki-day-path-event[data-accent='coral'] .moki-day-path-pill-time {
+  color: var(--moki-accent-coral);
+}
+
+.moki-day-path-event[data-accent='mint'] .moki-day-path-pill-time {
+  color: var(--moki-accent-mint);
+}
+
+.moki-day-path-event[data-accent='amber'] .moki-day-path-pill-time {
+  color: var(--moki-accent-amber);
+}
+
+.moki-day-path-event[data-accent='cyan'] .moki-day-path-pill-time {
+  color: var(--moki-accent-cyan);
+}
+
+/* Past events read muted against the upcoming ones. */
+/* Past events read muted against the upcoming ones. */
+.moki-day-path-dot.is-past,
+.moki-day-path-stem.is-past,
+.moki-day-path-pill.is-past {
+  opacity: 0.45;
+}
+
+.moki-day-path-fill.is-muted {
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+.moki-day-path-now {
+  position: absolute;
+  top: 64px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--moki-color-ink);
+  box-shadow: 0 0 12px var(--moki-accent-cyan);
   pointer-events: none;
 }
 
-.moki-day-timeline-empty {
-  position: absolute;
-  top: 32px;
-  left: var(--moki-space-8);
+.moki-day-path-empty {
+  display: block;
+  padding: var(--moki-space-8);
+}
+
+/* Week mode: one lane per day, each reusing the single-day track. */
+.moki-day-week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-12);
+}
+
+.moki-day-lane {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: var(--moki-space-12);
+  align-items: center;
+  min-width: 0;
+}
+
+.moki-day-lane-label {
+  white-space: nowrap;
+}
+
+.moki-day-lane-empty {
+  white-space: nowrap;
 }
 
 .moki-day-grid {

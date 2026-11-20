@@ -5,21 +5,29 @@ import type { CalendarEvent } from '../../../../../../../packages/protocol/src/i
  * interchangeable. */
 export type DayEvent = CalendarEvent
 
-/* Stand-in day until the calendar RPC lands: a readable spread across the
- * working day on the given local date. */
-export function FIXTURE_DAY_EVENTS(day: Date): DayEvent[] {
-  const at = (hour: number, minute: number, lengthMinutes: number, id: string, title: string): DayEvent => {
-    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute, 0, 0)
-    const end = new Date(start.getTime() + lengthMinutes * 60_000)
-    return { id, title, start: start.toISOString(), end: end.toISOString(), calendar: 'primary' }
+/* Fixture spread repeated across `spanDays` local days from `start`, so the
+ * week window has the same readable shape as a single day. Ids stay unique
+ * per day; titles match the single-day fixtures. */
+export function FIXTURE_DAY_RANGE(start: Date, spanDays: number): DayEvent[] {
+  const days = Math.max(1, Math.floor(spanDays))
+  const out: DayEvent[] = []
+  for (let offset = 0; offset < days; offset += 1) {
+    const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset)
+    const suffix = offset === 0 ? '' : `-d${offset}`
+    const at = (hour: number, minute: number, lengthMinutes: number, id: string, title: string): DayEvent => {
+      const eventStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute, 0, 0)
+      const end = new Date(eventStart.getTime() + lengthMinutes * 60_000)
+      return { id: `${id}${suffix}`, title, start: eventStart.toISOString(), end: end.toISOString(), calendar: 'primary' }
+    }
+    out.push(
+      at(9, 30, 30, 'fixture-standup', 'Standup'),
+      at(12, 0, 60, 'fixture-qwell', 'QWELL'),
+      at(13, 15, 45, 'fixture-lunch', 'Lunch'),
+      at(15, 30, 60, 'fixture-physio', 'Physio'),
+      at(18, 30, 60, 'fixture-garden', 'Garden')
+    )
   }
-  return [
-    at(9, 30, 30, 'fixture-standup', 'Standup'),
-    at(12, 0, 60, 'fixture-qwell', 'QWELL'),
-    at(13, 15, 45, 'fixture-lunch', 'Lunch'),
-    at(15, 30, 60, 'fixture-physio', 'Physio'),
-    at(18, 30, 60, 'fixture-garden', 'Garden')
-  ]
+  return out
 }
 
 /* Guard for the live RPC payload — anything off-shape keeps the fixtures.

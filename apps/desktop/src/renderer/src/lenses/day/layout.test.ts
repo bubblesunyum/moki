@@ -31,8 +31,8 @@ function memoryStorage(initial?: Record<string, string>): DayLayoutStorage & { d
   }
 }
 
-const IDS = ['up-next', 'focus']
-const spanFor = (id: string): number => (id === 'up-next' ? 7 : 5)
+const IDS = ['alpha', 'beta']
+const spanFor = (id: string): number => (id === 'alpha' ? 7 : 5)
 
 describe('clampSpan', () => {
   it('rounds and clamps into the grid', () => {
@@ -117,8 +117,8 @@ describe('resizeWidget', () => {
 describe('loadDayLayout', () => {
   it('returns defaults when nothing is stored', () => {
     expect(loadDayLayout(memoryStorage(), IDS, spanFor)).toEqual([
-      { id: 'up-next', span: 7 },
-      { id: 'focus', span: 5 }
+      { id: 'alpha', span: 7 },
+      { id: 'beta', span: 5 }
     ])
   })
 
@@ -127,29 +127,29 @@ describe('loadDayLayout', () => {
       [DAY_LAYOUT_STORAGE_KEY]: JSON.stringify({
         version: DAY_LAYOUT_VERSION,
         order: [
-          { id: 'focus', span: 8 },
-          { id: 'up-next', span: 4 }
+          { id: 'beta', span: 8 },
+          { id: 'alpha', span: 4 }
         ]
       })
     })
     expect(loadDayLayout(storage, IDS, spanFor)).toEqual([
-      { id: 'focus', span: 8 },
-      { id: 'up-next', span: 4 }
+      { id: 'beta', span: 8 },
+      { id: 'alpha', span: 4 }
     ])
   })
 
   it('falls back to defaults on corrupt JSON or a version mismatch', () => {
     const corrupt = memoryStorage({ [DAY_LAYOUT_STORAGE_KEY]: 'not json' })
     expect(loadDayLayout(corrupt, IDS, spanFor)).toEqual([
-      { id: 'up-next', span: 7 },
-      { id: 'focus', span: 5 }
+      { id: 'alpha', span: 7 },
+      { id: 'beta', span: 5 }
     ])
     const future = memoryStorage({
       [DAY_LAYOUT_STORAGE_KEY]: JSON.stringify({ version: 999, order: [] })
     })
     expect(loadDayLayout(future, IDS, spanFor)).toEqual([
-      { id: 'up-next', span: 7 },
-      { id: 'focus', span: 5 }
+      { id: 'alpha', span: 7 },
+      { id: 'beta', span: 5 }
     ])
   })
 
@@ -158,15 +158,15 @@ describe('loadDayLayout', () => {
       [DAY_LAYOUT_STORAGE_KEY]: JSON.stringify({
         version: DAY_LAYOUT_VERSION,
         order: [
-          { id: 'focus', span: 40 },
+          { id: 'beta', span: 40 },
           { id: 'gone', span: 6 },
-          { id: 'focus', span: 3 }
+          { id: 'beta', span: 3 }
         ]
       })
     })
     expect(loadDayLayout(storage, IDS, spanFor)).toEqual([
-      { id: 'focus', span: DAY_GRID_COLUMNS },
-      { id: 'up-next', span: 7 }
+      { id: 'beta', span: DAY_GRID_COLUMNS },
+      { id: 'alpha', span: 7 }
     ])
   })
 
@@ -178,8 +178,8 @@ describe('loadDayLayout', () => {
       setItem: () => {}
     }
     expect(loadDayLayout(broken, IDS, spanFor)).toEqual([
-      { id: 'up-next', span: 7 },
-      { id: 'focus', span: 5 }
+      { id: 'alpha', span: 7 },
+      { id: 'beta', span: 5 }
     ])
   })
 })
@@ -188,14 +188,14 @@ describe('saveDayLayout', () => {
   it('writes a versioned payload', () => {
     const storage = memoryStorage()
     saveDayLayout(storage, [
-      { id: 'focus', span: 8 },
-      { id: 'up-next', span: 4 }
+      { id: 'beta', span: 8 },
+      { id: 'alpha', span: 4 }
     ])
     expect(JSON.parse(storage.data[DAY_LAYOUT_STORAGE_KEY])).toEqual({
       version: DAY_LAYOUT_VERSION,
       order: [
-        { id: 'focus', span: 8 },
-        { id: 'up-next', span: 4 }
+        { id: 'beta', span: 8 },
+        { id: 'alpha', span: 4 }
       ]
     })
   })
@@ -203,8 +203,8 @@ describe('saveDayLayout', () => {
   it('round-trips through loadDayLayout', () => {
     const storage = memoryStorage()
     const order: DayWidgetPlacement[] = [
-      { id: 'focus', span: 8 },
-      { id: 'up-next', span: 4 }
+      { id: 'beta', span: 8 },
+      { id: 'alpha', span: 4 }
     ]
     saveDayLayout(storage, order)
     expect(loadDayLayout(storage, IDS, spanFor)).toEqual(order)
