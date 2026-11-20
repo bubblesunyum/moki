@@ -27,7 +27,9 @@ const api: MokiApi = {
       return Promise.reject(new Error('blocked non-http(s) URL'))
     }
     return ipcRenderer.invoke('shell:openExternal', url) as Promise<void>
-  }
+  },
+
+  local: (method, params) => ipcRenderer.invoke('day:call', method, params) as never
 }
 
 contextBridge.exposeInMainWorld('moki', api)

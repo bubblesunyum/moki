@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { captureSelectionFromEnv, captureSelectionQuery, captureWhenSettled, withCaptureSelection } from './dev/capture'
 import { HelperProcess, resolveHelperBinary, setupHelperIpc } from './helper/index'
+import { setupDayIpc } from './day/index'
 
 let helper: HelperProcess | null = null
 
@@ -51,6 +52,7 @@ void app.whenReady().then(() => {
   })
   helper.start()
   setupHelperIpc(ipcMain, shell, helper, () => BrowserWindow.getAllWindows())
+  setupDayIpc(ipcMain, shell, () => BrowserWindow.getAllWindows())
 
   // Dev smoke: prove the stdio round-trip once at startup.
   if (!app.isPackaged) {
