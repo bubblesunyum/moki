@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron'
 export interface CaptureSelection {
   threadId: string | undefined
   segment: string | undefined
+  lens: string | undefined
 }
 
 function trimToUndefined(value: string | undefined): string | undefined {
@@ -13,21 +14,32 @@ function trimToUndefined(value: string | undefined): string | undefined {
 
 /* Dev-only capture selection: MOKI_THREAD=<thread id> opens that thread
  * instead of the first row; MOKI_SEGMENT=<email|text|...> opens that
- * Messages segment. Unset behaves exactly as today; unknown values fall
- * back in the renderer with a console warning, never a blank pane. */
+ * Messages segment; MOKI_LENS=<lens id> opens that lens (e.g. day).
+ * Unset behaves exactly as today; unknown values fall back in the renderer
+ * with a console warning, never a blank pane. */
 export function captureSelectionFromEnv(env: NodeJS.ProcessEnv = process.env): CaptureSelection {
-  return { threadId: trimToUndefined(env['MOKI_THREAD']), segment: trimToUndefined(env['MOKI_SEGMENT']) }
+  return {
+    threadId: trimToUndefined(env['MOKI_THREAD']),
+    segment: trimToUndefined(env['MOKI_SEGMENT']),
+    lens: trimToUndefined(env['MOKI_LENS'])
+  }
 }
 
 /* Carry the selection to the renderer on the startup URL — the established
  * main->renderer channel, so no new IPC pipe. Absent values leave the URL
  * untouched. */
 export function withCaptureSelection(url: string, selection: CaptureSelection): string {
-  if (selection.threadId === undefined && selection.segment === undefined) return url
+  if (
+    selection.threadId === undefined &&
+    selection.segment === undefined &&
+    selection.lens === undefined
+  )
+    return url
   try {
     const parsed = new URL(url)
     if (selection.threadId !== undefined) parsed.searchParams.set('mokiThread', selection.threadId)
     if (selection.segment !== undefined) parsed.searchParams.set('mokiSegment', selection.segment)
+    if (selection.lens !== undefined) parsed.searchParams.set('mokiLens', selection.lens)
     return parsed.toString()
   } catch {
     return url
@@ -40,6 +52,7 @@ export function captureSelectionQuery(selection: CaptureSelection): Record<strin
   const query: Record<string, string> = {}
   if (selection.threadId !== undefined) query['mokiThread'] = selection.threadId
   if (selection.segment !== undefined) query['mokiSegment'] = selection.segment
+  if (selection.lens !== undefined) query['mokiLens'] = selection.lens
   return query
 }
 

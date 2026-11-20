@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { DEFAULT_LENS_ID, type LensId } from '../lenses/registry'
+import { DEFAULT_LENS_ID, LENSES, type LensId } from '../lenses/registry'
 
 const SIDEBAR_KEY = 'moki.shell.sidebarOpen'
 const INSPECTOR_KEY = 'moki.shell.inspectorOpen'
@@ -33,10 +33,24 @@ export interface ShellState {
   toggleInspector: () => void
 }
 
+/* Capture override (dev only, via ?mokiLens= on the startup URL, mirroring
+ * MessagesLens's ?mokiSegment=): an unknown id warns and keeps the default. */
+function initialLens(): LensId {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('mokiLens')?.trim().toLowerCase()
+    if (raw === null || raw === undefined || raw === '') return DEFAULT_LENS_ID
+    if (LENSES.some((lens) => lens.id === raw)) return raw as LensId
+    console.warn(`[capture] unknown MOKI_LENS="${raw}", using default lens`)
+  } catch {
+    /* Non-browser environment: default. */
+  }
+  return DEFAULT_LENS_ID
+}
+
 /* Sidebar/inspector visibility (persisted) + active lens routing (session).
  * Dev-only: Cmd+Shift+P toggles the Primitives showcase. */
 export function useShellState(): ShellState {
-  const [activeLens, setActiveLens] = useState<LensId>(DEFAULT_LENS_ID)
+  const [activeLens, setActiveLens] = useState<LensId>(initialLens)
   const [showPrimitives, setShowPrimitives] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => readFlag(SIDEBAR_KEY, true))
   const [inspectorOpen, setInspectorOpen] = useState(() => readFlag(INSPECTOR_KEY, true))

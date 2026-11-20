@@ -1,0 +1,147 @@
+/* Day lens: header, horizontal timeline, widget board. All color and
+ * spacing from ui/tokens.css — no raw values here. */
+
+.moki-day-lens {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-12);
+  overflow-y: auto;
+  padding: var(--moki-space-12);
+}
+
+.moki-day-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--moki-space-8);
+}
+
+.moki-day-header-date {
+  margin: 0;
+}
+
+.moki-day-timeline {
+  flex: none;
+}
+
+.moki-day-timeline-track {
+  position: relative;
+  height: 88px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--moki-divider-line);
+}
+
+.moki-day-timeline-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--moki-divider-line);
+  padding-left: var(--moki-space-4);
+  pointer-events: none;
+}
+
+.moki-day-timeline-pill {
+  position: absolute;
+  top: 28px;
+  height: 32px;
+  /* Short events still get a readable nub: the title ellipsizes, and the
+   * full text rides in the title attr. */
+  min-width: 96px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--moki-space-8);
+  overflow: hidden;
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-pill);
+  white-space: nowrap;
+}
+
+.moki-day-timeline-pill-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moki-day-timeline-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--moki-accent-cyan);
+  pointer-events: none;
+}
+
+.moki-day-timeline-empty {
+  position: absolute;
+  top: 32px;
+  left: var(--moki-space-8);
+}
+
+.moki-day-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--moki-space-12);
+  align-items: start;
+}
+
+.moki-day-widget {
+  position: relative;
+  padding: var(--moki-space-8);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  cursor: grab;
+}
+
+.moki-day-widget:active {
+  cursor: grabbing;
+}
+
+.moki-day-widget.is-dragging {
+  opacity: 0.5;
+}
+
+/* Drop target uses the shared selection treatment (tokens.css .selected-lit):
+ * edge-only reads as an error state next to selected rows. */
+.moki-day-widget.is-drop-target {
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  box-shadow: var(--moki-selection-shadow);
+}
+
+.moki-day-widget-head {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+}
+
+.moki-day-widget-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-4);
+}
+
+.moki-day-widget-resize {
+  position: absolute;
+  right: var(--moki-space-4);
+  bottom: var(--moki-space-4);
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  border-right: 2px solid var(--moki-color-faint);
+  border-bottom: 2px solid var(--moki-color-faint);
+  border-bottom-right-radius: var(--moki-radius-inset);
+  touch-action: none;
+}
+
+.moki-day-widget-resize:focus-visible {
+  outline: 2px solid var(--moki-accent-cyan);
+  outline-offset: 2px;
+}

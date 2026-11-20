@@ -55,6 +55,9 @@ describe('Shell', () => {
       if (lens.title === 'Messages') {
         return { title: lens.title, panes: ['messages-list-pane', 'messages-thread-pane'] as const }
       }
+      if (lens.title === 'Day') {
+        return { title: lens.title, panes: ['day-lens'] as const }
+      }
       if (lens.title === 'Commerce' || lens.title === 'Notifications' || lens.title === 'Feed') {
         const id = lens.title.toLowerCase()
         return { title: lens.title, panes: [`${id}-list-pane`, `${id}-thread-pane`] as const }
