@@ -17,12 +17,16 @@ struct MokiHelper {
             await server.register("accounts.list", handler: fixtureAccountsListHandler())
             await server.register("mail.listThreads", handler: fixtureMailListThreadsHandler())
             await server.register("mail.getThread", handler: fixtureMailGetThreadHandler())
+            await server.register("calendar.listEvents", handler: fixtureCalendarListEventsHandler())
         } else {
             await server.register("accounts.list", handler: googleAccountsListHandler())
+            let accounts = GoogleAccountsService()
             let mail = MailService(
-                accounts: GoogleAccountsService(), session: .shared)
+                accounts: accounts, session: .shared)
             await server.register("mail.listThreads", handler: mailListThreadsHandler(service: mail))
             await server.register("mail.getThread", handler: mailGetThreadHandler(service: mail))
+            let calendar = CalendarService(accounts: accounts, session: .shared)
+            await server.register("calendar.listEvents", handler: calendarListEventsHandler(service: calendar))
         }
         await server.run()
     }

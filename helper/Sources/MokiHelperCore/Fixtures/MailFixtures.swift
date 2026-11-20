@@ -246,14 +246,14 @@ public func fixtureAccountsListHandler() -> @Sendable (JSONValue) async throws -
 
 public func fixtureMailListThreadsHandler() -> @Sendable (JSONValue) async throws -> MailPage {
     return { params in
-        let request = try decodeMailParams(params, as: ListThreadsParams.self)
+        let request = try decodeRpcParams(params, as: ListThreadsParams.self)
         return MailFixtures.listThreads(label: request.label, cursor: request.cursor)
     }
 }
 
 public func fixtureMailGetThreadHandler() -> @Sendable (JSONValue) async throws -> ThreadDetail {
     return { params in
-        let request = try decodeMailParams(params, as: GetThreadParams.self)
+        let request = try decodeRpcParams(params, as: GetThreadParams.self)
         return try MailFixtures.getThread(account: request.account, id: request.id)
     }
 }

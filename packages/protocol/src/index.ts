@@ -76,11 +76,35 @@ export interface MailGetThreadParams {
   id: string
 }
 
+export interface CalendarEvent {
+  id: string
+  title: string
+  /** ISO8601 date-time string (`YYYY-MM-DD` for all-day events). */
+  start: string
+  end: string
+  calendar: string
+  account?: string
+}
+
+export interface CalendarListEventsParams {
+  /** RFC3339 lower bound (inclusive), e.g. `2026-11-20T00:00:00Z`. */
+  timeMin: string
+  /** RFC3339 upper bound (exclusive). */
+  timeMax: string
+}
+
+export interface CalendarListEventsResult {
+  events: CalendarEvent[]
+  unreachable: string[]
+  authExpired: string[]
+}
+
 export interface RpcMethodMap {
   'helper.ping': { params: void; result: { ok: boolean; version: string } }
   'accounts.list': { params: void; result: AccountsListResult }
   'mail.listThreads': { params: MailListThreadsParams; result: MailListThreadsResult }
   'mail.getThread': { params: MailGetThreadParams; result: ThreadDetail }
+  'calendar.listEvents': { params: CalendarListEventsParams; result: CalendarListEventsResult }
 }
 
 export type RpcMethod = keyof RpcMethodMap

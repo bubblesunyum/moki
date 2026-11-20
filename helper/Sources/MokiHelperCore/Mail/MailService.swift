@@ -114,10 +114,10 @@ public struct MailService: Sendable {
 
 // MARK: - RPC handlers
 
-/// Decode RPC params through JSON round-trip. Shared with the fixture
-/// handlers in `Fixtures/MailFixtures.swift` so both entry points reject
-/// malformed params identically.
-func decodeMailParams<T: Decodable>(_ params: JSONValue, as type: T.Type) throws -> T {
+/* Decode RPC params through a JSON round-trip. Shared with the fixture
+ * handlers in `Fixtures/MailFixtures.swift` and the calendar handlers so
+ * all entry points reject malformed params identically. */
+func decodeRpcParams<T: Decodable>(_ params: JSONValue, as type: T.Type) throws -> T {
     do {
         let data = try JSONEncoder().encode(params)
         return try JSONDecoder().decode(T.self, from: data)
@@ -128,14 +128,14 @@ func decodeMailParams<T: Decodable>(_ params: JSONValue, as type: T.Type) throws
 
 public func mailListThreadsHandler(service: MailService) -> @Sendable (JSONValue) async throws -> MailPage {
     return { params in
-        let request = try decodeMailParams(params, as: ListThreadsParams.self)
+        let request = try decodeRpcParams(params, as: ListThreadsParams.self)
         return try await service.listThreads(label: request.label, cursor: request.cursor)
     }
 }
 
 public func mailGetThreadHandler(service: MailService) -> @Sendable (JSONValue) async throws -> ThreadDetail {
     return { params in
-        let request = try decodeMailParams(params, as: GetThreadParams.self)
+        let request = try decodeRpcParams(params, as: GetThreadParams.self)
         return try await service.getThread(account: request.account, id: request.id)
     }
 }
