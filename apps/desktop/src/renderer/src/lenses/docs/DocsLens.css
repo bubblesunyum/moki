@@ -51,6 +51,29 @@
   margin: 0;
 }
 
+/* Quiet follow-up line under a signed-out state (Drive's Zen note, the
+ * Notion token explainer). Muted small text at the section inset. */
+.moki-docs-auth-note {
+  margin: var(--moki-space-8) 0 0;
+}
+
+/* Inline external link inside quiet copy: accent-cyan underline on the
+ * muted line, resetting the UA button chrome. */
+.moki-docs-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--moki-accent-cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.moki-docs-link:focus-visible {
+  outline: 1px solid var(--moki-accent-cyan);
+  outline-offset: 1px;
+}
+
 .moki-docs-signout {
   display: flex;
   align-items: center;
