@@ -109,8 +109,13 @@ export interface DocItem {
   source: DocSource
   /** ISO8601 last-modified string. */
   updatedAt: string
-  /** Absolute http(s) URL opened in the right-pane preview. */
+  /** Absolute http(s) URL opened in the right-pane preview. Empty when the
+   * row opens out-of-app via `deepLink` instead (Craft). */
   openUrl: string
+  /** Optional out-of-app open target (Craft `craftdocs://` deep link).
+   * Rows with a deepLink open in the native app via openExternal and never
+   * load in the webview guest. */
+  deepLink?: string
 }
 
 export interface DocsListRecentsParams {
@@ -153,6 +158,31 @@ export interface NotionSetTokenParams {
   token: string
 }
 
+/** Craft Connect (connect.craft.do): the connection URL is the credential —
+ * paste it once, the helper validates it with GET /connection and stores it
+ * in its 0600 file. Listing is GET /documents (space order, not recency —
+ * the section must not call its rows recent). */
+export interface CraftConnectSaveParams {
+  url: string
+}
+
+export interface CraftConnectValidateResult {
+  ok: boolean
+  spaceName?: string
+}
+
+/** Google sign-in for Drive (Desktop OAuth, PKCE + loopback — the RPC
+ * timeout is 15s, so start returns at once and the renderer polls). */
+export type GoogleSignInPollStatus = 'pending' | 'done' | 'error'
+
+export interface GoogleSignInPollResult {
+  status: GoogleSignInPollStatus
+  /** Present when done: the address that was signed in. */
+  account?: string
+  /** Present when error: one-line cause. */
+  message?: string
+}
+
 export interface RpcMethodMap {
   'helper.ping': { params: void; result: { ok: boolean; version: string } }
   'accounts.list': { params: void; result: AccountsListResult }
@@ -163,6 +193,12 @@ export interface RpcMethodMap {
   'notion.listRecents': { params: void; result: NotionListRecentsResult }
   'notion.setToken': { params: NotionSetTokenParams; result: { ok: boolean } }
   'notion.signOut': { params: void; result: { ok: boolean } }
+  'craftConnect.validate': { params: CraftConnectSaveParams; result: CraftConnectValidateResult }
+  'craftConnect.save': { params: CraftConnectSaveParams; result: { ok: boolean } }
+  'craftConnect.signOut': { params: void; result: { ok: boolean } }
+  'google.signInStart': { params: void; result: { ok: boolean } }
+  'google.signInPoll': { params: void; result: GoogleSignInPollResult }
+  'google.signInCancel': { params: void; result: { ok: boolean } }
 }
 
 export type RpcMethod = keyof RpcMethodMap

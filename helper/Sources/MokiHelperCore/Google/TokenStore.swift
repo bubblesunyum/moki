@@ -105,6 +105,17 @@ public struct GoogleTokenStore: Sendable {
             saveTokenFile(merged, at: locations.mokiTokensURL)
         }
     }
+
+    /// Store (or replace) the refresh token for one address — the sign-in
+    /// write path. Unlike the psymail import merges above (which never
+    /// overwrite, so an import can't clobber a wider Moki-minted grant), a
+    /// fresh consent replaces the old grant so a re-auth actually widens
+    /// scopes. Same file, same 0600 mode, same `{address: token}` format.
+    public func saveRefreshToken(_ token: String, for address: String) {
+        var map = readTokenFile(at: locations.mokiTokensURL)
+        map[address] = token
+        saveTokenFile(map, at: locations.mokiTokensURL)
+    }
 }
 
 /// One-time, deadline-bounded psymail-mini import, shared for the helper's

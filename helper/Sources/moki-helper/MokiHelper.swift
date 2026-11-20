@@ -32,10 +32,13 @@ struct MokiHelper {
             let drive = DriveService(accounts: accounts, session: .shared)
             await server.register("docs.listDrive", handler: driveListFilesHandler(service: drive))
             let notion = NotionService()
-            let docs = DocsRecentsService(drive: drive, notion: notion)
+            let craft = CraftService(session: .shared)
+            let docs = DocsRecentsService(drive: drive, notion: notion, craft: craft)
             await server.register("docs.listRecents", handler: docsListRecentsHandler(service: docs))
         }
         await server.registerNotionMethods()
+        await server.registerCraftMethods()
+        await server.registerGoogleSignInMethods()
         await server.run()
     }
 }
