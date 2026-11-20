@@ -13,7 +13,7 @@ function dayFraction(now: number): number {
 }
 
 export function DayHeader({ now, title, sub }: { now: number; title: string; sub: string }): React.JSX.Element {
-  const time = new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })
+  const time = new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   const fraction = dayFraction(now)
   /* Arc starts at the top and sweeps clockwise; the tip dot rides its end. */
   const angle = -Math.PI / 2 + fraction * 2 * Math.PI
