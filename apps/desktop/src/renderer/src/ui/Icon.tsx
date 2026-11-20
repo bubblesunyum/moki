@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDot,
   Code,
+  ExternalLink,
   FileText,
   Folder,
   Globe,
@@ -21,11 +22,14 @@ import {
   PanelLeft,
   PanelRight,
   Plus,
+  RotateCw,
   Search,
   ShoppingBag,
   SquareCheck,
+  Star,
   Sun,
-  Users
+  Users,
+  X
 } from 'lucide-react'
 
 /* Figma `icon/<name>` -> Lucide mapping (brief §7). `filter` is the newer
@@ -57,7 +61,11 @@ export const FIGMA_ICON_MAP = {
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   'chevron-down': ChevronDown,
-  plus: Plus
+  'rotate-cw': RotateCw,
+  'external-link': ExternalLink,
+  plus: Plus,
+  star: Star,
+  x: X
 } as const
 
 export type FigmaIconName = keyof typeof FIGMA_ICON_MAP
