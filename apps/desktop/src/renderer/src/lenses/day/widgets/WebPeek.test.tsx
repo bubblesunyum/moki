@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { initialPeekUrl, WebViewWidget } from './WebViewWidget'
 import { WebPeek } from './WebPeek'
 import { hostOf, isSecureUrl, normalizeAddress, WEBVIEW_HOME_DEFAULT } from './webviewShared'
@@ -11,16 +11,40 @@ function emit(el: Element, type: string, url: string, extra?: Record<string, unk
 
 function setMockBridge(): { openExternal: ReturnType<typeof vi.fn> } {
   const openExternal = vi.fn().mockResolvedValue(undefined)
-  ;(window as unknown as { moki: unknown }).moki = { openExternal }
+  popupHandlers.length = 0
+  ;(window as unknown as { moki: unknown }).moki = {
+    openExternal,
+    on: (event: string, cb: (params: { url: string }) => void) => {
+      if (event === 'web.popup') popupHandlers.push(cb as (params: unknown) => void)
+      return () => {}
+    }
+  }
   return { openExternal }
 }
 
+/* Popups arrive over `web.popup` (main denied the native window). */
+const popupHandlers: Array<(params: unknown) => void> = []
+
+function firePopup(url: string): void {
+  act(() => {
+    for (const cb of popupHandlers) cb({ url })
+  })
+}
+
+function firePopupRaw(params: unknown): void {
+  act(() => {
+    for (const cb of popupHandlers) cb(params)
+  })
+}
+
 function clearMockBridge(): void {
+  popupHandlers.length = 0
   delete (window as unknown as { moki?: unknown }).moki
 }
 
 afterEach(() => {
   cleanup()
+  clearMockBridge()
   window.history.replaceState({}, '', '/')
 })
 
@@ -53,6 +77,7 @@ describe('WebPeek', () => {
     expect(frame.getAttribute('src')).toBe('https://accounts.example.com/o/auth')
     expect(frame.getAttribute('partition')).toBe('persist:moki-websites')
     expect(frame.getAttribute('sandbox')).toBe('')
+    expect(frame.getAttribute('allowpopups')).toBe('')
   })
 
   it('closes on Escape', () => {
@@ -86,8 +111,9 @@ describe('WebPeek', () => {
 
 describe('WebViewWidget peek', () => {
   it('opens a Peek on popup requests instead of leaving the app', () => {
+    setMockBridge()
     render(<WebViewWidget />)
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://accounts.example.com/o/auth')
+    firePopup('https://accounts.example.com/o/auth')
     expect(screen.getByTestId('web-peek')).toBeDefined()
     expect(screen.getByRole('dialog', { name: 'Preview of accounts.example.com' })).toBeDefined()
     /* The tile home is untouched while the peek is open. */
@@ -95,29 +121,44 @@ describe('WebViewWidget peek', () => {
   })
 
   it('blocks unsafe popup schemes quietly', () => {
+    setMockBridge()
     render(<WebViewWidget />)
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'javascript:alert(1)')
+    firePopup('javascript:alert(1)')
+    expect(screen.queryByTestId('web-peek')).toBeNull()
+  })
+
+  it('ignores param-less popup notifications without throwing', () => {
+    setMockBridge()
+    render(<WebViewWidget />)
+    expect(() => {
+      firePopupRaw(undefined)
+      firePopupRaw(null)
+      firePopupRaw({})
+      firePopupRaw({ url: 42 })
+    }).not.toThrow()
     expect(screen.queryByTestId('web-peek')).toBeNull()
   })
 
   it('dismisses on backdrop click, X and Escape', () => {
+    setMockBridge()
     render(<WebViewWidget />)
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://example.com/auth')
+    firePopup('https://example.com/auth')
     fireEvent.mouseDown(screen.getByTestId('web-peek'))
     expect(screen.queryByTestId('web-peek')).toBeNull()
 
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://example.com/auth')
+    firePopup('https://example.com/auth')
     fireEvent.click(screen.getByRole('button', { name: 'Close preview' }))
     expect(screen.queryByTestId('web-peek')).toBeNull()
 
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://example.com/auth')
+    firePopup('https://example.com/auth')
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByTestId('web-peek')).toBeNull()
   })
 
   it('expand promotes the peeked page into the tile', () => {
+    setMockBridge()
     render(<WebViewWidget />)
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://example.com/signed-in')
+    firePopup('https://example.com/signed-in')
     fireEvent.click(screen.getByRole('button', { name: 'Open in tile' }))
     expect(screen.queryByTestId('web-peek')).toBeNull()
     expect(screen.getByTestId('day-webview-frame').getAttribute('src')).toBe('https://example.com/signed-in')
@@ -152,29 +193,28 @@ describe('WebViewWidget peek', () => {
   })
 
   it('a second popup retitles and re-targets Expand instead of going stale', () => {
+    setMockBridge()
     render(<WebViewWidget />)
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://first.example/a')
+    firePopup('https://first.example/a')
     expect(screen.getByRole('dialog', { name: 'Preview of first.example' })).toBeDefined()
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://second.example/b')
+    firePopup('https://second.example/b')
     expect(screen.getByRole('dialog', { name: 'Preview of second.example' })).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Open in tile' }))
     expect(screen.queryByTestId('web-peek')).toBeNull()
     expect(screen.getByTestId('day-webview-frame').getAttribute('src')).toBe('https://second.example/b')
   })
 
-  it('forwards validated in-peek popups outside and blocks credentialed URLs', () => {
-    const { openExternal } = setMockBridge()
-    try {
-      render(<WebPeek url="https://auth.example.com/start" onClose={() => {}} onExpand={() => {}} />)
-      const frame = screen.getByTestId('web-peek-frame')
-      emit(frame, 'new-window', 'https://app.example.com/next')
-      expect(openExternal).toHaveBeenCalledWith('https://app.example.com/next')
-      openExternal.mockClear()
-      emit(frame, 'new-window', 'https://user:secret@evil.example/x')
-      expect(openExternal).not.toHaveBeenCalled()
-    } finally {
-      clearMockBridge()
-    }
+  it('nested popups swap the peek content and credentialed URLs never load', () => {
+    setMockBridge()
+    render(<WebViewWidget />)
+    firePopup('https://auth.example.com/start')
+    expect(screen.getByRole('dialog', { name: 'Preview of auth.example.com' })).toBeDefined()
+    /* A popup from inside the peek replaces the content — no peek-in-peek. */
+    firePopup('https://app.example.com/next')
+    expect(screen.getByRole('dialog', { name: 'Preview of app.example.com' })).toBeDefined()
+    firePopup('https://user:secret@evil.example/x')
+    expect(screen.getByRole('dialog', { name: 'Preview of app.example.com' })).toBeDefined()
+    expect(screen.queryByTestId('web-peek')).not.toBeNull()
   })
 
   it('tracks hash navigations into Expand', () => {
@@ -201,10 +241,11 @@ describe('WebViewWidget peek', () => {
   })
 
   it('traps Tab inside the card and returns focus to the tile on dismiss', () => {
+    setMockBridge()
     render(<WebViewWidget />)
     const input = screen.getByLabelText('Web address') as HTMLInputElement
     input.focus()
-    emit(screen.getByTestId('day-webview-frame'), 'new-window', 'https://example.com/a')
+    firePopup('https://example.com/a')
     expect(document.activeElement?.getAttribute('role')).toBe('dialog')
     /* Shift+Tab from anywhere outside wraps to the last control. */
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })

@@ -24,15 +24,13 @@ export function WebPeek({ url, onClose, onExpand }: WebPeekProps): React.JSX.Ele
   const cardRef = useRef<HTMLDivElement | null>(null)
 
   /* Auth redirects stay in the peek: follow validated navigations so the
-   * title bar and Expand track where the flow actually landed. New-window
-   * requests inside the peek go outside — no peek-in-peek. */
+   * title bar and Expand track where the flow actually landed. Popups from
+   * inside the peek route through main back to the tile, which swaps the
+   * peek content — no peek-in-peek. */
   const { setView, go } = useSandboxedWebview({
     onNavigate: (next) => {
       currentRef.current = next
       setCurrent(next)
-    },
-    onNewWindow: (next) => {
-      getBridge()?.openExternal(next).catch(() => undefined)
     }
   })
 

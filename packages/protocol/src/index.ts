@@ -114,6 +114,10 @@ export type RpcResult<M extends RpcMethod> = RpcMethodMap[M]['result']
 export interface RpcNotificationMap {
   'helper.status': { status: 'starting' | 'ok' | 'down' }
   'day.clipboardChanged': { entry: DayClipboardEntry }
+  /* A webview guest asked for a popup (window.open / target=_blank). Main
+   * denies the native window; the Day Web tile opens it as a Peek after
+   * re-validating the URL with its strict allowlist. */
+  'web.popup': { url: string }
 }
 
 /** Live Day-lens entries served by the Electron main process. */

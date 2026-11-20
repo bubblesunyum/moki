@@ -50,6 +50,7 @@ describe('WebViewWidget', () => {
     expect(frame.getAttribute('src')).toBe('https://example.com/inbox')
     expect(frame.getAttribute('partition')).toBe(WEBVIEW_PARTITION)
     expect(frame.getAttribute('sandbox')).toBe('')
+    expect(frame.getAttribute('allowpopups')).toBe('')
   })
 
   it('falls back to the default home with nothing stored', () => {

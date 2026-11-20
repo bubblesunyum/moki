@@ -3,7 +3,7 @@ import { getBridge } from '../../../rpc/bridge'
 import { IconButton, Text } from '../../../ui'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { WebPeek } from './WebPeek'
-import { useSandboxedWebview } from './useWebviewGuest'
+import { useSandboxedWebview, useWebviewPopup } from './useWebviewGuest'
 import {
   normalizeAddress,
   validateWebviewHome,
@@ -39,16 +39,19 @@ export function WebViewWidget(): React.JSX.Element {
   const [peek, setPeek] = useState<string | null>(initialPeekUrl)
 
   /* Guest wiring (partition, sandbox, allowlist, listeners) lives in the
-   * shared hook; the tile only says what navigation and popups mean. */
+   * shared hook; the tile only says what navigation means. Popups arrive
+   * over `web.popup` (main denied the native window): validated again here
+   * before anything loads. */
   const { setView, go } = useSandboxedWebview({
     onNavigate: (url) => {
       setHome(url)
       setDraft(url)
-    },
-    onNewWindow: (url) => {
-      setPeek(url)
     }
   })
+
+  /* Popup route: main denied the native window and forwarded the URL;
+   * the hook re-validates before anything loads. */
+  useWebviewPopup(setPeek)
 
   function openOutside(): void {
     getBridge()?.openExternal(home).catch(() => undefined)
