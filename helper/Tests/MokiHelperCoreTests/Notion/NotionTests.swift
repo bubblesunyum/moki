@@ -395,6 +395,7 @@ struct NotionServiceTests {
     // MARK: - Fixtures
 
     @Test func fixturesReturnTwelveWithoutTokenOrNetwork() async throws {
+        await NotionFixtureAuthState.shared.reset()
         let log = NotionRequestLog()
         NotionStubURLProtocol.setHandler { request in
             log.append(request)
@@ -411,6 +412,81 @@ struct NotionServiceTests {
         #expect(result.status == .ok)
         #expect(result.items.count == 12)
         #expect(log.all.isEmpty)
+    }
+
+    // MARK: - Fixture auth (hermetic: never touches the Keychain)
+
+    private func makeFixtureNotionService(
+        secrets: any SecretStoring = InMemorySecretStore()
+    ) -> NotionService {
+        NotionService(
+            secrets: secrets,
+            session: makeNotionStubSession(),
+            rateLimiter: NotionRateLimiter(minInterval: 0),
+            fixtures: true)
+    }
+
+    @Test func fixtureSignOutListsSignedOutWithoutTouchingSecrets() async throws {
+        await NotionFixtureAuthState.shared.reset()
+        let store = InMemorySecretStore()
+        try store.write(
+            "ntn_real", service: MokiKeychainIDs.service,
+            account: MokiKeychainIDs.notionTokenAccount)
+        let service = makeFixtureNotionService(secrets: store)
+
+        let out = try await service.signOut()
+        #expect(out == NotionOK())
+        // The real entry survives a fixtures sign-out.
+        #expect(
+            store.read(
+                service: MokiKeychainIDs.service,
+                account: MokiKeychainIDs.notionTokenAccount) == "ntn_real")
+
+        let result = try await service.listRecents()
+        #expect(result.status == .signedOut)
+        #expect(result.items.isEmpty)
+        await NotionFixtureAuthState.shared.reset()
+    }
+
+    @Test func fixtureSetTokenRestoresRowsWithoutTouchingSecrets() async throws {
+        await NotionFixtureAuthState.shared.reset()
+        let store = InMemorySecretStore()
+        let service = makeFixtureNotionService(secrets: store)
+
+        _ = try await service.signOut()
+        let signedOut = try await service.listRecents()
+        #expect(signedOut.status == .signedOut)
+        #expect(signedOut.items.isEmpty)
+
+        let set = try await service.setToken("  ntn_fixture  ")
+        #expect(set == NotionOK())
+        // Nothing written anywhere: the token lives only in the process.
+        #expect(
+            store.read(
+                service: MokiKeychainIDs.service,
+                account: MokiKeychainIDs.notionTokenAccount) == nil)
+
+        let result = try await service.listRecents()
+        #expect(result.status == .ok)
+        #expect(result.items.count == 12)
+        await NotionFixtureAuthState.shared.reset()
+    }
+
+    @Test func fixtureSetTokenBlankStillThrowsWithoutChangingState() async throws {
+        await NotionFixtureAuthState.shared.reset()
+        let service = makeFixtureNotionService()
+        do {
+            _ = try await service.setToken("   ")
+            Issue.record("expected InvalidParamsError")
+        } catch is InvalidParamsError {
+        } catch {
+            Issue.record("wrong error: \(error)")
+        }
+        // Still signed in: rows keep flowing.
+        let result = try await service.listRecents()
+        #expect(result.status == .ok)
+        #expect(result.items.count == 12)
+        await NotionFixtureAuthState.shared.reset()
     }
 
     // MARK: - RPC wiring

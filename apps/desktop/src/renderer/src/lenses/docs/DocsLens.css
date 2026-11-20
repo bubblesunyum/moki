@@ -13,9 +13,85 @@
   padding: var(--moki-space-8) 0;
 }
 
-.moki-docs-section-title {
+/* Section head: title left, Notion sign-out right. The head carries the
+ * row inset the title used to own. */
+.moki-docs-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--moki-space-8);
   padding: 0 var(--moki-space-12);
   margin-bottom: var(--moki-space-4);
+}
+
+.moki-docs-section-title {
+  margin: 0;
+}
+
+/* Header-level Zen import control: one quiet button plus per-group
+ * status lines. */
+.moki-docs-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--moki-space-4);
+  padding: var(--moki-space-8) var(--moki-space-12) 0;
+}
+
+.moki-docs-zen-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-2);
+}
+
+.moki-docs-zen-row {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+  margin: 0;
+}
+
+.moki-docs-signout {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+}
+
+.moki-docs-auth {
+  margin-top: var(--moki-space-8);
+}
+
+.moki-docs-token-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--moki-space-4);
+}
+
+.moki-docs-token-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--moki-space-4) var(--moki-space-8);
+  color: var(--moki-color-ink);
+  font-family: var(--moki-font);
+  font-size: 13px;
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-control);
+  outline: none;
+}
+
+.moki-docs-token-input::placeholder {
+  color: var(--moki-color-faint);
+}
+
+.moki-docs-token-actions {
+  display: flex;
+  gap: var(--moki-space-4);
+}
+
+.moki-docs-token-error {
+  margin: 0;
 }
 
 .moki-docs-row {

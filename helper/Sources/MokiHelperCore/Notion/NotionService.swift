@@ -30,6 +30,12 @@ public struct NotionService: Sendable {
     /// itself never appears in the result.
     public func listRecents() async throws -> NotionRecentsResult {
         if fixtures {
+            // Hermetic fixture auth: a fixtures sign-out flips the
+            // in-memory flag (never the Keychain), and the signed-out
+            // state travels as an envelope — same shape as live.
+            if await NotionFixtureAuthState.shared.isSignedOut() {
+                return NotionRecentsResult(status: .signedOut, items: [])
+            }
             return NotionRecentsResult(status: .ok, items: notionFixtureRecents())
         }
         guard let token = secrets.read(
@@ -79,6 +85,13 @@ public struct NotionService: Sendable {
         guard !trimmed.isEmpty else {
             throw InvalidParamsError("Notion token must not be empty.")
         }
+        if fixtures {
+            // Hermetic: clear the in-memory signed-out flag without
+            // writing the real Keychain — a token pasted in a fixtures
+            // session restores rows and is forgotten with the process.
+            await NotionFixtureAuthState.shared.setSignedOut(false)
+            return NotionOK()
+        }
         do {
             try secrets.write(
                 trimmed, service: MokiKeychainIDs.service,
@@ -90,7 +103,14 @@ public struct NotionService: Sendable {
     }
 
     /// Sign out: wipe the Keychain entry. Missing entry still succeeds.
+    /// Under fixtures, flip the in-memory flag instead — the real Keychain
+    /// entry is never touched, so a fixtures sign-out cannot delete the
+    /// developer's real token.
     public func signOut() async throws -> NotionOK {
+        if fixtures {
+            await NotionFixtureAuthState.shared.setSignedOut(true)
+            return NotionOK()
+        }
         do {
             try secrets.delete(
                 service: MokiKeychainIDs.service,
@@ -144,13 +164,34 @@ extension RPCServer {
 
 /// Canned 12-row recents for `MOKI_FIXTURES=1` (UI work, screenshots): no
 /// network, no Keychain touch.
-func notionFixtureRecents() -> [NotionRecent] {
-    (1...notionRecentsPageSize).map { index in
+///
+/// Canonical mirror: ids/titles/URLs match the renderer's DOC_FIXTURES
+/// notion section (lenses/docs/fixtures.ts) row-for-row — the two sides
+/// cannot share one file across the TS/Swift boundary, so the contract tests
+/// on both sides pin the same id lists. lastEditedTime is generated relative
+/// to now with the same minutes-ago offsets, so recency holds at any
+/// wall-clock time.
+func notionFixtureRecents(now: Date = Date()) -> [NotionRecent] {
+    let seeds: [(id: String, title: String, minutesAgo: Double)] = [
+        ("Tansy-Roadmap-9f2c1a", "Tansy roadmap", 20),
+        ("Weekly-Review-7d4b2e", "Weekly review", 65),
+        ("Meeting-Notes-3a8f1c", "Meeting notes", 130),
+        ("Product-Spec-5e6a9d", "Life OS spec", 200),
+        ("Habit-Tracker-1b3d7f", "Habit tracker", 280),
+        ("Book-Notes-8c2e4a", "Book notes", 360),
+        ("Travel-Plans-6f1a3c", "Travel plans", 470),
+        ("Gift-Ideas-2d9b5e", "Gift ideas", 590),
+        ("Home-Renovation-4a7c1e", "Home renovation", 700),
+        ("Side-Project-9e3f8b", "Side project log", 830),
+        ("Recipes-5b8d2f", "Recipes", 960),
+        ("Journal-7c1e6a", "Journal", 1200),
+    ]
+    return seeds.map { seed in
         NotionRecent(
-            id: String(format: "00000000-0000-4000-8000-%012d", index),
-            title: "Fixture page \(index)",
-            url: "https://www.notion.so/fixture-\(index)",
-            object: index % 3 == 0 ? "database" : "page",
-            lastEditedTime: String(format: "2026-11-2%dT10:00:00.000Z", index % 10))
+            id: seed.id,
+            title: seed.title,
+            url: "https://www.notion.so/\(seed.id)",
+            object: "page",
+            lastEditedTime: iso8601String(now.addingTimeInterval(-seed.minutesAgo * 60)))
     }
 }

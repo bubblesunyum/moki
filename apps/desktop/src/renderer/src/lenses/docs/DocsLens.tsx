@@ -5,6 +5,9 @@ import { formatListDate } from '../mail/formatListDate'
 import { DocPreview } from './DocPreview'
 import { DOC_SOURCES, DOC_SOURCE_LABEL } from './fixtures'
 import { useDocsRecents, type DocsRecents } from './useDocsRecents'
+import { getBridge } from '../../rpc/bridge'
+import { ZenImportControl } from './ZenImportControl'
+import { NotionSignOutButton, NotionTokenForm } from './NotionAuth'
 import '../mail/InboxLayout.css'
 import './DocsLens.css'
 
@@ -73,12 +76,21 @@ function DocSection({
   selectedId: string | null
   onSelect: (doc: DocItem) => void
 }): React.JSX.Element {
+  /* Notion carries its own auth affordances: the token form in the
+   * signed-out state, a sign-out button beside the title once signed in.
+   * Both need the bridge; fixture mode (plain browser, captures) stays
+   * clean without them. */
+  const hasBridge = getBridge() !== null
+  const showSignOut =
+    source === 'notion' && hasBridge && query.status !== 'loading' && query.status !== 'signed-out'
   if (query.status === 'loading') {
     return (
       <section className="moki-docs-section" data-testid={`docs-section-${source}`} aria-label={DOC_SOURCE_LABEL[source]}>
-        <Text variant="small" className="moki-docs-section-title" tone="muted">
-          {DOC_SOURCE_LABEL[source]}
-        </Text>
+        <div className="moki-docs-section-head">
+          <Text variant="small" className="moki-docs-section-title" tone="muted">
+            {DOC_SOURCE_LABEL[source]}
+          </Text>
+        </div>
         <div className="moki-docs-skeletons" role="status" aria-label={`Loading ${DOC_SOURCE_LABEL[source]}`}>
           {Array.from({ length: 3 }, (_, index) => (
             <span key={index} className="moki-docs-skeleton" aria-hidden="true" />
@@ -90,15 +102,22 @@ function DocSection({
   if (query.status === 'signed-out') {
     return (
       <section className="moki-docs-section" data-testid={`docs-section-${source}`} aria-label={DOC_SOURCE_LABEL[source]}>
-        <Text variant="small" className="moki-docs-section-title" tone="muted">
-          {DOC_SOURCE_LABEL[source]}
-        </Text>
+        <div className="moki-docs-section-head">
+          <Text variant="small" className="moki-docs-section-title" tone="muted">
+            {DOC_SOURCE_LABEL[source]}
+          </Text>
+        </div>
         <div className="moki-docs-section-state">
           <QuietState
             icon="notes"
             text={`Sign in to ${DOC_SOURCE_LABEL[source]}`}
             label={`${DOC_SOURCE_LABEL[source]} needs sign-in`}
           />
+          {source === 'notion' && (
+            <div className="moki-docs-auth">
+              <NotionTokenForm />
+            </div>
+          )}
         </div>
       </section>
     )
@@ -111,9 +130,12 @@ function DocSection({
         : null
   return (
     <section className="moki-docs-section" data-testid={`docs-section-${source}`} aria-label={DOC_SOURCE_LABEL[source]}>
-      <Text variant="small" className="moki-docs-section-title" tone="muted">
-        {DOC_SOURCE_LABEL[source]}
-      </Text>
+      <div className="moki-docs-section-head">
+        <Text variant="small" className="moki-docs-section-title" tone="muted">
+          {DOC_SOURCE_LABEL[source]}
+        </Text>
+        {showSignOut && <NotionSignOutButton />}
+      </div>
       {query.items.map((doc) => (
         <DocRow key={doc.id} doc={doc} selected={doc.id === selectedId} onSelect={onSelect} />
       ))}
@@ -162,6 +184,7 @@ export function DocsLens(): React.JSX.Element {
   return (
     <div className="moki-inbox-lens">
       <GlassPane className="moki-inbox-list moki-docs-list" data-testid="docs-list-pane">
+        <ZenImportControl />
         {sections.map(({ source, query }) => (
           <DocSection
             key={source}
