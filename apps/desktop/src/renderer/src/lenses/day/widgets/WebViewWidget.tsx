@@ -1,135 +1,66 @@
-import { createElement, useEffect, useRef, useState, type FormEvent } from 'react'
+import { createElement, useState, type FormEvent } from 'react'
 import { getBridge } from '../../../rpc/bridge'
 import { IconButton, Text } from '../../../ui'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { WebPeek } from './WebPeek'
+import { useSandboxedWebview } from './useWebviewGuest'
+import {
+  normalizeAddress,
+  validateWebviewHome,
+  WEBVIEW_HOME_DEFAULT,
+  WEBVIEW_STORAGE_KEY
+} from './webviewShared'
 
-export const WEBVIEW_STORAGE_KEY = 'moki.day.webview.home'
-export const WEBVIEW_HOME_DEFAULT = 'https://example.com'
-export const WEBVIEW_PARTITION = 'persist:moki-websites'
-const WEBVIEW_PREFS = 'contextIsolation=yes, sandbox=yes'
-
-/* https-only allowlist: explicit http(s) URLs pass through as typed, bare
- * hosts gain an https:// scheme, everything else is rejected and nothing
- * loads (no javascript:, data:, file:, ftp:, or scheme-relative games). */
-export function normalizeAddress(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (trimmed === '' || /\s/.test(trimmed)) return null
-  const schemeMatch = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(trimmed)
-  if (schemeMatch) {
-    const scheme = schemeMatch[1].toLowerCase()
-    if (scheme !== 'http' && scheme !== 'https') return null
-    try {
-      const url = new URL(trimmed)
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-      if (url.hostname === '') return null
-      if (url.username !== '' || url.password !== '') return null
-      return trimmed
-    } catch {
-      return null
-    }
-  }
-  if (trimmed.startsWith('/') || trimmed.includes('\\')) return null
+/* Capture override (dev only, via ?mokiPeek= on the startup URL): opens the
+ * Peek on mount so screenshots can prove the overlay. Unknown or unsafe
+ * values stay shut — an unvalidated peek must never load. */
+export function initialPeekUrl(): string | null {
   try {
-    const url = new URL(`https://${trimmed}`)
-    if (url.hostname === '' || url.username !== '' || url.password !== '') return null
-    return `https://${trimmed}`
+    const raw = new URLSearchParams(window.location.search).get('mokiPeek')
+    if (raw === null || raw.trim() === '') return null
+    return normalizeAddress(raw)
   } catch {
     return null
   }
 }
 
-function validateHome(raw: unknown): string | null {
-  return typeof raw === 'string' ? normalizeAddress(raw) : null
-}
-
-export function loadHome(): string {
-  try {
-    const raw = window.localStorage.getItem(WEBVIEW_STORAGE_KEY)
-    if (typeof raw !== 'string') return WEBVIEW_HOME_DEFAULT
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      parsed = raw
-    }
-    return validateHome(parsed) ?? WEBVIEW_HOME_DEFAULT
-  } catch {
-    /* Storage blocked — fall back to the default home. */
-    return WEBVIEW_HOME_DEFAULT
-  }
-}
-
-/* Minimal webview surface: jsdom has no <webview>, so every method is
- * optional and every call is guarded — the address UI still works there. */
-interface WebviewElement extends HTMLElement {
-  goBack?(): void
-  goForward?(): void
-  reload?(): void
-}
-
 /* Web widget: a sandboxed <webview> under a floating pill (Back / Forward /
- * Reload / address field / Open in browser). The home URL persists per
- * widget in localStorage; in-page navigation follows it along. */
+ * Reload / address field / Open in browser). Popups and target=_blank links
+ * open in an Arc-style Peek over the board instead of leaving the app; the
+ * home URL persists per widget, and in-page navigation follows it along. */
 export function WebViewWidget(): React.JSX.Element {
   const [home, setHome] = usePersistentState<string>(
     WEBVIEW_STORAGE_KEY,
-    validateHome,
+    validateWebviewHome,
     WEBVIEW_HOME_DEFAULT
   )
   const [draft, setDraft] = useState<string>(home)
   const [rejected, setRejected] = useState(false)
-  const viewRef = useRef<WebviewElement | null>(null)
+  const [peek, setPeek] = useState<string | null>(initialPeekUrl)
 
-  /* Partition + sandbox land as plain attributes via this one path (props
-   * only carry src — passing both would double-set the custom element). */
-  useEffect(() => {
-    const el = viewRef.current
-    if (!el) return
-    try {
-      el.setAttribute('partition', WEBVIEW_PARTITION)
-      el.setAttribute('sandbox', '')
-      el.setAttribute('webpreferences', WEBVIEW_PREFS)
-    } catch {
-      /* Attribute writes never fail in practice — stay quiet. */
-    }
-  }, [])
-
-  /* In-page link clicks follow the persisted home; popups open outside. */
-  useEffect(() => {
-    const el = viewRef.current
-    if (!el) return
-    const onNavigate = (e: Event): void => {
-      const url = (e as Event & { url?: unknown }).url
-      if (typeof url !== 'string' || normalizeAddress(url) === null) return
+  /* Guest wiring (partition, sandbox, allowlist, listeners) lives in the
+   * shared hook; the tile only says what navigation and popups mean. */
+  const { setView, go } = useSandboxedWebview({
+    onNavigate: (url) => {
       setHome(url)
       setDraft(url)
+    },
+    onNewWindow: (url) => {
+      setPeek(url)
     }
-    const onNewWindow = (e: Event): void => {
-      e.preventDefault()
-      const url = (e as Event & { url?: unknown }).url
-      if (typeof url !== 'string') return
-      getBridge()?.openExternal(url).catch(() => undefined)
-    }
-    el.addEventListener('did-navigate', onNavigate)
-    el.addEventListener('new-window', onNewWindow)
-    return () => {
-      el.removeEventListener('did-navigate', onNavigate)
-      el.removeEventListener('new-window', onNewWindow)
-    }
-  }, [setHome])
-
-  function go(where: 'back' | 'forward' | 'reload'): void {
-    try {
-      if (where === 'back') viewRef.current?.goBack?.()
-      else if (where === 'forward') viewRef.current?.goForward?.()
-      else viewRef.current?.reload?.()
-    } catch {
-      /* No webview under test — the address UI still works. */
-    }
-  }
+  })
 
   function openOutside(): void {
     getBridge()?.openExternal(home).catch(() => undefined)
+  }
+
+  /* Expand: the peeked page becomes the tile — Arc's "open as tab". The
+   * key remounts the peek per popup, so a second popup never inherits the
+   * first one's title bar or Expand target. */
+  function expandPeek(url: string): void {
+    setHome(url)
+    setDraft(url)
+    setPeek(null)
   }
 
   function submit(e: FormEvent): void {
@@ -187,13 +118,12 @@ export function WebViewWidget(): React.JSX.Element {
         </Text>
       )}
       {createElement('webview', {
-        ref: (el: WebviewElement | null) => {
-          viewRef.current = el
-        },
+        ref: setView,
         className: 'moki-day-webview-frame',
         'data-testid': 'day-webview-frame',
         src: home
       })}
+      {peek !== null && <WebPeek key={peek} url={peek} onClose={() => setPeek(null)} onExpand={expandPeek} />}
     </div>
   )
 }

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { WebViewWidget } from './WebViewWidget'
 import {
-  WebViewWidget,
   WEBVIEW_HOME_DEFAULT,
   WEBVIEW_PARTITION,
   WEBVIEW_STORAGE_KEY,
   normalizeAddress
-} from './WebViewWidget'
+} from './webviewShared'
 
 afterEach(() => cleanup())
 beforeEach(() => window.localStorage.clear())

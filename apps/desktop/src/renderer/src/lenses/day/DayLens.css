@@ -472,6 +472,100 @@
   margin: 0;
 }
 
+/* Peek: Arc-style floating preview. The backdrop dims the board but keeps
+ * it visible behind; the card floats centered with the tile's glass
+ * treatment. All color from ui/tokens.css — no raw values here. */
+.moki-peek-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--moki-space-24);
+  background: color-mix(in srgb, var(--moki-color-ground) 62%, transparent);
+  animation: moki-peek-fade 150ms ease-out;
+}
+
+.moki-peek-card {
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  height: min(620px, 100%);
+  overflow: hidden;
+  background: var(--moki-glass-fill);
+  border: var(--moki-glass-edge);
+  border-radius: var(--moki-radius-card);
+  box-shadow: var(--moki-popover-shadow);
+  backdrop-filter: blur(var(--moki-popover-blur));
+  outline: none;
+  animation: moki-peek-in 160ms ease-out;
+}
+
+@keyframes moki-peek-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes moki-peek-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moki-peek-backdrop,
+  .moki-peek-card {
+    animation: none;
+  }
+}
+
+.moki-peek-head {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  min-height: 28px;
+  padding: var(--moki-space-8) var(--moki-space-12);
+  border-bottom: 1px solid var(--moki-divider-line);
+}
+
+.moki-peek-nav,
+.moki-peek-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+  flex: none;
+}
+
+.moki-peek-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--moki-space-4);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moki-peek-frame {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  background: var(--moki-quiet-fill);
+}
+
 /* Day widgets, CCP look: card radius 16, inner padding 12, VStack spacing 8.
  * Section labels are 11px semibold secondary uppercase with 4px bottom pad;
  * 12px gaps sit between sections. All color from ui/tokens.css. */
