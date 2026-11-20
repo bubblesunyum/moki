@@ -49,14 +49,18 @@ describe('Shell', () => {
     expect(screen.getByTestId('messages-thread-pane')).toBeDefined()
   })
 
-  /* title → expected pane testids; null means the `${title} is coming` placeholder. */
+  /* title → expected pane testids; null means the `${title} is coming` placeholder.
+   * Explicit overrides plus the title-derived default for the mail-bundle lenses. */
+  const PANES_BY_TITLE: Record<string, readonly string[]> = {
+    Messages: ['messages-list-pane', 'messages-thread-pane'],
+    Day: ['day-lens'],
+    Docs: ['docs-list-pane', 'docs-preview-pane']
+  }
   it.each(
     LENSES.map((lens) => {
-      if (lens.title === 'Messages') {
-        return { title: lens.title, panes: ['messages-list-pane', 'messages-thread-pane'] as const }
-      }
-      if (lens.title === 'Day') {
-        return { title: lens.title, panes: ['day-lens'] as const }
+      const override = PANES_BY_TITLE[lens.title]
+      if (override !== undefined) {
+        return { title: lens.title, panes: override }
       }
       if (lens.title === 'Commerce' || lens.title === 'Notifications' || lens.title === 'Feed') {
         const id = lens.title.toLowerCase()

@@ -1,0 +1,184 @@
+import Foundation
+
+// MARK: - Docs dispatcher (`docs.listRecents`)
+//
+// The renderer calls one method per section — `docs.listRecents {source}` —
+// and expects a `DocsListRecentsResult` envelope (`items` + `unreachable` +
+// `signedOut`). The helper previously served Drive and Notion under separate
+// method names (`docs.listDrive`, `notion.listRecents`) with different
+// shapes, so the live renderer path always errored into fixture-partial.
+// This dispatcher unifies them: Drive reuses `DriveService.listFiles`,
+// Notion reuses `NotionService.listRecents`, Craft has no API yet (see
+// mok-8uu.6 spike) and reports `unreachable`.
+//
+// Tokens never leave the helper: the Notion integration token stays in the
+// Keychain behind `NotionService`, and only rows + status cross the RPC
+// boundary. No TaskGroup anywhere on this path (see swift-taskgroup-timeout
+// trap): Drive lists accounts sequentially inside `DriveService`, and the
+// Notion proxy is one serial search call behind its rate limiter.
+
+/// `docs.listRecents` params: which Docs section to serve.
+public struct DocsListRecentsParams: Codable, Sendable {
+    public var source: DocSource
+
+    public init(source: DocSource) {
+        self.source = source
+    }
+}
+
+/// Per-section envelope the renderer (`useDocsRecents`) branches on:
+/// `signedOut` empties the section into its sign-in state, `unreachable`
+/// renders the one-line partial notice over whatever rows survived.
+public struct DocsListRecentsResult: Codable, Sendable, Equatable {
+    public var items: [DocItem]
+    public var unreachable: Bool
+    public var signedOut: Bool
+
+    public init(items: [DocItem], unreachable: Bool, signedOut: Bool) {
+        self.items = items
+        self.unreachable = unreachable
+        self.signedOut = signedOut
+    }
+}
+
+public struct DocsRecentsService: Sendable {
+    private let drive: DriveService
+    private let notion: NotionService
+
+    public init(drive: DriveService, notion: NotionService) {
+        self.drive = drive
+        self.notion = notion
+    }
+
+    /// Serve one section. Never throws: every failure mode lands in the
+    /// envelope so the lens renders rows, partial, or sign-in — never a
+    /// blank RPC error.
+    public func listRecents(source: DocSource) async -> DocsListRecentsResult {
+        switch source {
+        case .drive:
+            return await driveRecents()
+        case .notion:
+            return await notionRecents()
+        case .craft:
+            // No Craft API yet (see mok-8uu.6 spike): report unreachable so
+            // the section shows its partial state instead of fake rows.
+            return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
+        }
+    }
+
+    /// Drive rows are already `DocItem`-shaped with `source == .drive`:
+    /// pass them through, folding the per-account `unreachable`/`authExpired`
+    /// lists into the section flags. Contract: never send rows with
+    /// `signedOut` — an expired grant alongside healthy rows is a partial
+    /// (rows + `unreachable`); only a fully empty page with expired grants
+    /// signs out.
+    private func driveRecents() async -> DocsListRecentsResult {
+        do {
+            let page = try await drive.listFiles()
+            let signedOut = page.items.isEmpty && !page.authExpired.isEmpty
+            return DocsListRecentsResult(
+                items: page.items,
+                unreachable: signedOut || !page.authExpired.isEmpty || !page.unreachable.isEmpty,
+                signedOut: signedOut)
+        } catch {
+            return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
+        }
+    }
+
+    /// Map `NotionService` search results to `DocItem`s (`source == .notion`,
+    /// `updatedAt` from `last_edited_time`, `openUrl` from the page URL with
+    /// a `notion.so` fallback). Auth states empty the section into sign-in;
+    /// anything else (`unreachable`, `rate_limited` throws) is a partial.
+    private func notionRecents() async -> DocsListRecentsResult {
+        do {
+            let result = try await notion.listRecents()
+            switch result.status {
+            case .ok:
+                return DocsListRecentsResult(
+                    items: result.items.map(notionDocItem(from:)),
+                    unreachable: false, signedOut: false)
+            case .signedOut, .authExpired:
+                return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
+            }
+        } catch {
+            return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
+        }
+    }
+}
+
+/// Map one Notion row to the shared `DocItem` shape. Rows always carry an
+/// id (id-less search results are skipped upstream), so only the URL needs
+/// a fallback.
+func notionDocItem(from recent: NotionRecent) -> DocItem {
+    let openUrl: String
+    if let url = recent.url, !url.isEmpty {
+        openUrl = url
+    } else {
+        openUrl = "https://www.notion.so/\(recent.id)"
+    }
+    return DocItem(
+        id: recent.id, title: recent.title, source: .notion,
+        updatedAt: recent.lastEditedTime, openUrl: openUrl)
+}
+
+// MARK: - RPC handlers
+
+public func docsListRecentsHandler(service: DocsRecentsService) -> @Sendable (JSONValue) async throws
+    -> DocsListRecentsResult
+{
+    return { params in
+        let request = try decodeRpcParams(params, as: DocsListRecentsParams.self)
+        return await service.listRecents(source: request.source)
+    }
+}
+
+/// Canned per-source rows for `MOKI_FIXTURES=1`: no network, no Keychain
+/// touch. Drive and Notion mirror the existing fixture builders; Craft gets
+/// 12 canned rows (mirroring the renderer's `DOC_FIXTURES` craft section)
+/// so the lens shell shows content before the mok-8uu.6 spike lands an API.
+public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throws -> DocsListRecentsResult {
+    return { params in
+        let request = try decodeRpcParams(params, as: DocsListRecentsParams.self)
+        switch request.source {
+        case .drive:
+            let page = DriveFixtures.listFiles()
+            return DocsListRecentsResult(items: page.items, unreachable: false, signedOut: false)
+        case .notion:
+            return DocsListRecentsResult(
+                items: notionFixtureRecents().map(notionDocItem(from:)),
+                unreachable: false, signedOut: false)
+        case .craft:
+            return DocsListRecentsResult(
+                items: DocsFixtures.craftRecents(), unreachable: false, signedOut: false)
+        }
+    }
+}
+
+// MARK: - Fixtures
+
+public enum DocsFixtures {
+    /// 12 canned Craft rows (no API yet): titles mirror the renderer's
+    /// `DOC_FIXTURES` craft section; every URL is an absolute https URL so
+    /// the right-pane preview loads.
+    public static func craftRecents() -> [DocItem] {
+        let seeds: [(id: String, title: String, updatedAt: String)] = [
+            ("s/launch-checklist-a1b2c3", "Launch checklist", "2026-11-20T15:35:00.000Z"),
+            ("s/essay-draft-d4e5f6", "Essay draft", "2026-11-20T14:50:00.000Z"),
+            ("s/trip-itinerary-g7h8i9", "Trip itinerary", "2026-11-20T13:30:00.000Z"),
+            ("s/reading-notes-j0k1l2", "Reading notes", "2026-11-20T12:10:00.000Z"),
+            ("s/garden-plan-m3n4o5", "Garden plan", "2026-11-20T10:50:00.000Z"),
+            ("s/talk-outline-p6q7r8", "Talk outline", "2026-11-20T08:40:00.000Z"),
+            ("s/budget-review-s9t0u1", "Budget review", "2026-11-20T06:30:00.000Z"),
+            ("s/book-club-v2w3x4", "Book club picks", "2026-11-20T04:41:00.000Z"),
+            ("s/workout-log-y5z6a7", "Workout log", "2026-11-20T02:30:00.000Z"),
+            ("s/gift-list-b8c9d0", "Gift list", "2026-11-19T22:50:00.000Z"),
+            ("s/home-inventory-e1f2g3", "Home inventory", "2026-11-19T20:40:00.000Z"),
+            ("s/ideas-inbox-h4i5j6", "Ideas inbox", "2026-11-19T18:30:00.000Z"),
+        ]
+        return seeds.map {
+            DocItem(
+                id: $0.id, title: $0.title, source: .craft,
+                updatedAt: $0.updatedAt, openUrl: "https://www.craft.do/\($0.id)")
+        }
+    }
+}

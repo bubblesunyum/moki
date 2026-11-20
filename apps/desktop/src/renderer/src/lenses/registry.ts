@@ -2,6 +2,7 @@ import { createElement, type ComponentType } from 'react'
 import type { FigmaIconName } from '../ui'
 import { CommerceLens } from './commerce/CommerceLens'
 import { DayLens } from './day/DayLens'
+import { DocsLens } from './docs/DocsLens'
 import { FeedLens } from './feed/FeedLens'
 import { MessagesLens } from './messages/MessagesLens'
 import { NotificationsLens } from './notifications/NotificationsLens'
@@ -49,7 +50,7 @@ const MESSAGES: LensDef = {
 export const LENSES: LensDef[] = [
   { id: 'day', title: 'Day', icon: 'today', Component: DayLens },
   MESSAGES,
-  { id: 'docs', title: 'Docs', icon: 'notes', Component: placeholderLens('Docs') },
+  { id: 'docs', title: 'Docs', icon: 'notes', Component: DocsLens },
   { id: 'tasks', title: 'Tasks', icon: 'tasks', Component: placeholderLens('Tasks') },
   { id: 'calendar', title: 'Calendar', icon: 'calendar', Component: placeholderLens('Calendar') },
   { id: 'feed', title: 'Feed', icon: 'globe', Component: FeedLens },

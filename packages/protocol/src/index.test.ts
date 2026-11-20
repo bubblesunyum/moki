@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   PROTOCOL_VERSION,
+  WEBSITES_PARTITION,
   isExternalHttpUrl,
+  type DocItem,
+  type DocsListRecentsParams,
+  type DocsListRecentsResult,
   type MailGetThreadParams,
   type MailListThreadsParams,
   type MailListThreadsResult,
+  type NotionListRecentsResult,
+  type NotionSetTokenParams,
   type RpcErrorShape,
   type RpcMethodMap,
   type ThreadDetail
@@ -117,8 +123,14 @@ describe('protocol', () => {
     expect(err.data?.code).toBe('auth_expired')
   })
 
-  it('accepts only absolute http(s) URLs for openExternal', () => {
-    expect(isExternalHttpUrl('https://example.com/x')).toBe(true)
+  it('pins the one websites partition every embedder shares', () => {
+    // Main (web-session.ts, zenCookies.shared.ts) and renderer
+    // (webviewShared.ts) must stay on this exact string — a mismatch
+    // silently splits the cookie jar.
+    expect(WEBSITES_PARTITION).toBe('persist:moki-websites')
+  })
+
+  it('accepts only absolute http(s) URLs for openExternal', () => {    expect(isExternalHttpUrl('https://example.com/x')).toBe(true)
     expect(isExternalHttpUrl('http://example.com')).toBe(true)
     expect(isExternalHttpUrl('  https://example.com/  ')).toBe(true)
     expect(isExternalHttpUrl('file:///etc/passwd')).toBe(false)
@@ -130,5 +142,71 @@ describe('protocol', () => {
     expect(isExternalHttpUrl(null)).toBe(false)
     expect(isExternalHttpUrl(42)).toBe(false)
     expect(isExternalHttpUrl({})).toBe(false)
+  })
+
+  it('types docs.listRecents with one source param', () => {
+    const params: DocsListRecentsParams = { source: 'drive' }
+    const item: DocItem = {
+      id: 'd1',
+      title: 'Launch plan',
+      source: 'drive',
+      updatedAt: new Date().toISOString(),
+      openUrl: 'https://drive.google.com/file/d/d1/view'
+    }
+    const result: DocsListRecentsResult = { items: [item], unreachable: false, signedOut: false }
+    expect(params.source).toBe('drive')
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0].openUrl).toBe('https://drive.google.com/file/d/d1/view')
+    // Dates cross as ISO8601 strings, so they must round-trip.
+    expect(Number.isNaN(Date.parse(result.items[0].updatedAt))).toBe(false)
+    expect(isExternalHttpUrl(result.items[0].openUrl)).toBe(true)
+  })
+
+  it('types per-source signed-out and unreachable flags', () => {
+    const signedOut: DocsListRecentsResult = { items: [], unreachable: false, signedOut: true }
+    const partial: DocsListRecentsResult = { items: [], unreachable: true, signedOut: false }
+    expect(signedOut.signedOut).toBe(true)
+    expect(partial.unreachable).toBe(true)
+  })
+
+  it('types notion.listRecents with an auth-state envelope', () => {
+    const ok: NotionListRecentsResult = {
+      status: 'ok',
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          title: 'Roadmap',
+          url: 'https://www.notion.so/roadmap-111',
+          object: 'page',
+          lastEditedTime: new Date().toISOString()
+        }
+      ]
+    }
+    const signedOut: NotionListRecentsResult = { status: 'signed_out', items: [] }
+    const authExpired: NotionListRecentsResult = { status: 'auth_expired', items: [] }
+    expect(ok.items).toHaveLength(1)
+    expect(Number.isNaN(Date.parse(ok.items[0].lastEditedTime))).toBe(false)
+    expect(signedOut.status).toBe('signed_out')
+    expect(authExpired.items).toHaveLength(0)
+  })
+
+  it('types notion.setToken and notion.signOut', () => {
+    const params: NotionSetTokenParams = { token: 'ntn_live' }
+    const setResult: RpcMethodMap['notion.setToken']['result'] = { ok: true }
+    const signOutResult: RpcMethodMap['notion.signOut']['result'] = { ok: true }
+    const listResult: RpcMethodMap['notion.listRecents']['result'] = { status: 'ok', items: [] }
+    expect(params.token).toBe('ntn_live')
+    expect(setResult.ok).toBe(true)
+    expect(signOutResult.ok).toBe(true)
+    expect(listResult.status).toBe('ok')
+  })
+
+  it('carries rate_limited through the shared error shape', () => {
+    const err: RpcErrorShape = {
+      code: -32000,
+      message: 'Notion is rate-limiting requests.',
+      data: { code: 'rate_limited' }
+    }
+    expect(err.data?.code).toBe('rate_limited')
   })
 })
