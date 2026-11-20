@@ -538,7 +538,92 @@ struct DocsRecentsTests {
         #expect(signedOut == false)
     }
 
+    @Test func fixtureRowsMirrorCanonicalContract() async throws {
+        // Checked-in mirror of the renderer's DOC_FIXTURES
+        // (lenses/docs/fixtures.ts header): TS and Swift cannot share one
+        // fixture file, so a fixture change on either side without the other
+        // fails here or in the renderer's "mirrors the canonical contract"
+        // test. Change rows here AND there together.
+        let canonicalDrive: [(id: String, title: String)] = [
+            ("1a2b3c4d5e6f7g8h9i0j", "Launch plan v3"),
+            ("2b3c4d5e6f7g8h9i0j1k", "Board deck — November"),
+            ("3c4d5e6f7g8h9i0j1k2l", "Hiring rubric"),
+            ("4d5e6f7g8h9i0j1k2l3m", "Pricing experiments"),
+            ("5e6f7g8h9i0j1k2l3m4n", "Offsite notes"),
+            ("6f7g8h9i0j1k2l3m4n5o", "Q4 budget"),
+            ("7g8h9i0j1k2l3m4n5o6p", "Design critique thread"),
+            ("8h9i0j1k2l3m4n5o6p7q", "API migration checklist"),
+            ("9i0j1k2l3m4n5o6p7q8r", "Customer visit notes"),
+            ("0j1k2l3m4n5o6p7q8r9s", "Brand refresh brief"),
+            ("1k2l3m4n5o6p7q8r9s0t", "All-hands agenda"),
+            ("2l3m4n5o6p7q8r9s0t1u", "Reading list"),
+        ]
+        let canonicalNotion: [(id: String, title: String)] = [
+            ("Tansy-Roadmap-9f2c1a", "Tansy roadmap"),
+            ("Weekly-Review-7d4b2e", "Weekly review"),
+            ("Meeting-Notes-3a8f1c", "Meeting notes"),
+            ("Product-Spec-5e6a9d", "Life OS spec"),
+            ("Habit-Tracker-1b3d7f", "Habit tracker"),
+            ("Book-Notes-8c2e4a", "Book notes"),
+            ("Travel-Plans-6f1a3c", "Travel plans"),
+            ("Gift-Ideas-2d9b5e", "Gift ideas"),
+            ("Home-Renovation-4a7c1e", "Home renovation"),
+            ("Side-Project-9e3f8b", "Side project log"),
+            ("Recipes-5b8d2f", "Recipes"),
+            ("Journal-7c1e6a", "Journal"),
+        ]
+        let canonicalCraft: [(id: String, title: String)] = [
+            ("s/launch-checklist-a1b2c3", "Launch checklist"),
+            ("s/essay-draft-d4e5f6", "Essay draft"),
+            ("s/trip-itinerary-g7h8i9", "Trip itinerary"),
+            ("s/reading-notes-j0k1l2", "Reading notes"),
+            ("s/garden-plan-m3n4o5", "Garden plan"),
+            ("s/talk-outline-p6q7r8", "Talk outline"),
+            ("s/budget-review-s9t0u1", "Budget review"),
+            ("s/book-club-v2w3x4", "Book club picks"),
+            ("s/workout-log-y5z6a7", "Workout log"),
+            ("s/gift-list-b8c9d0", "Gift list"),
+            ("s/home-inventory-e1f2g3", "Home inventory"),
+            ("s/ideas-inbox-h4i5j6", "Ideas inbox"),
+        ]
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime]
+        await NotionFixtureAuthState.shared.reset()
+        let handler = fixtureDocsListRecentsHandler()
+        for (source, canonical) in [
+            (DocSource.drive, canonicalDrive),
+            (DocSource.notion, canonicalNotion),
+            (DocSource.craft, canonicalCraft),
+        ] as [(DocSource, [(id: String, title: String)])] {
+            let result = try await handler(.object(["source": .string(source.rawValue)]))
+            #expect(result.items.count == 12, "expected 12 rows for \(source)")
+            #expect(result.items.map(\.id) == canonical.map(\.id), "id drift for \(source)")
+            #expect(result.items.map(\.title) == canonical.map(\.title), "title drift for \(source)")
+            for item in result.items {
+                let expected: String =
+                    switch source {
+                    case .drive: "https://drive.google.com/file/d/\(item.id)/view"
+                    case .notion: "https://www.notion.so/\(item.id)"
+                    case .craft: "https://www.craft.do/\(item.id)"
+                    }
+                #expect(item.openUrl == expected, "openUrl drift for \(item.id)")
+            }
+            // Within the last day, newest first — so ?mokiDoc pins and any
+            // recency filter hold under MOKI_FIXTURES=1 at any wall-clock time.
+            var previous = Date.distantFuture
+            for item in result.items {
+                let date = try #require(
+                    parser.date(from: item.updatedAt), "unparseable updatedAt for \(item.id)")
+                let age = Date().timeIntervalSince(date)
+                #expect(age >= 0 && age < 24 * 60 * 60, "stale updatedAt for \(item.id)")
+                #expect(date < previous, "not newest-first at \(item.id)")
+                previous = date
+            }
+        }
+    }
+
     @Test func fixtureHandlerServesTwelveHttpsRowsPerSource() async throws {
+        await NotionFixtureAuthState.shared.reset()
         let handler = fixtureDocsListRecentsHandler()
         for source in [DocSource.drive, .notion, .craft] as [DocSource] {
             let result = try await handler(.object(["source": .string(source.rawValue)]))
@@ -552,8 +637,37 @@ struct DocsRecentsTests {
         }
     }
 
-    // MARK: - Mapping unit
+    @Test func fixtureDocsHandlerHonorsFixtureSignOut() async throws {
+        await NotionFixtureAuthState.shared.reset()
+        let handler = fixtureDocsListRecentsHandler()
+        let notionParams = JSONValue.object(["source": .string(DocSource.notion.rawValue)])
+        // Signed in by default: 12 rows, flags clear.
+        let before = try await handler(notionParams)
+        #expect(before.items.count == 12)
+        #expect(before.signedOut == false)
 
+        // Sign out through the fixture NotionService — the same path the
+        // renderer calls — and the section settles into sign-in state.
+        let notion = NotionService(
+            secrets: InMemorySecretStore(),
+            session: makeDocsStubSession(),
+            rateLimiter: NotionRateLimiter(minInterval: 0),
+            fixtures: true)
+        _ = try await notion.signOut()
+        let signedOut = try await handler(notionParams)
+        #expect(signedOut.items.isEmpty)
+        #expect(signedOut.unreachable == false)
+        #expect(signedOut.signedOut == true)
+
+        // A pasted token restores rows with no renderer change.
+        _ = try await notion.setToken("ntn_fixture")
+        let restored = try await handler(notionParams)
+        #expect(restored.items.count == 12)
+        #expect(restored.signedOut == false)
+        await NotionFixtureAuthState.shared.reset()
+    }
+
+    // MARK: - Mapping unit
     @Test func notionDocItemMapping() {
         let withURL = notionDocItem(
             from: NotionRecent(

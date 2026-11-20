@@ -1,9 +1,18 @@
 import type { DocItem, DocSource } from '../../../../../../../packages/protocol/src/index'
 
-/* Fixture recents (12 per source) with real open URLs, so the lens UX lands
- * before any network: each row opens a page that actually loads. Drive and
- * Notion entries point at real product surfaces; Craft entries at public
- * product pages. `updatedAt` stays within the last day, newest first. */
+/* CANONICAL Docs fixture table — the single source of truth for Docs lens
+ * fixtures (12 per source with real open URLs, so the lens UX lands before
+ * any network). The Swift helper mirrors this table row-for-row under
+ * MOKI_FIXTURES=1 (DriveFixtures.listFiles, notionFixtureRecents,
+ * DocsFixtures.craftRecents); the two sides cannot share one file across
+ * the TS/Swift boundary, so the id/title/URL lists are pinned by contract
+ * tests on both sides ("docs fixtures mirror the canonical contract" here,
+ * "fixtureRowsMirrorCanonicalContract" in DocsRecentsTests). Change rows
+ * here AND there together, or the contract tests fail.
+ *
+ * `updatedAt` stays within the
+ * last day, newest first — generated relative to now so ?mokiDoc pins and
+ * "within last day" hold at any wall-clock time. */
 
 function at(minutesAgo: number): string {
   return new Date(Date.now() - minutesAgo * 60_000).toISOString()

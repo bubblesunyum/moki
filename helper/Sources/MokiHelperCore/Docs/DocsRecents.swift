@@ -144,6 +144,14 @@ public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throw
             let page = DriveFixtures.listFiles()
             return DocsListRecentsResult(items: page.items, unreachable: false, signedOut: false)
         case .notion:
+            // Fixture Notion auth is hermetic in-memory state (see
+            // NotionFixtureAuthState, flipped by the fixture branches of
+            // notion.setToken/signOut): a fixtures sign-out empties this
+            // section into its sign-in state instead of snapping back to
+            // rows.
+            if await NotionFixtureAuthState.shared.isSignedOut() {
+                return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
+            }
             return DocsListRecentsResult(
                 items: notionFixtureRecents().map(notionDocItem(from:)),
                 unreachable: false, signedOut: false)
@@ -160,25 +168,32 @@ public enum DocsFixtures {
     /// 12 canned Craft rows (no API yet): titles mirror the renderer's
     /// `DOC_FIXTURES` craft section; every URL is an absolute https URL so
     /// the right-pane preview loads.
-    public static func craftRecents() -> [DocItem] {
-        let seeds: [(id: String, title: String, updatedAt: String)] = [
-            ("s/launch-checklist-a1b2c3", "Launch checklist", "2026-11-20T15:35:00.000Z"),
-            ("s/essay-draft-d4e5f6", "Essay draft", "2026-11-20T14:50:00.000Z"),
-            ("s/trip-itinerary-g7h8i9", "Trip itinerary", "2026-11-20T13:30:00.000Z"),
-            ("s/reading-notes-j0k1l2", "Reading notes", "2026-11-20T12:10:00.000Z"),
-            ("s/garden-plan-m3n4o5", "Garden plan", "2026-11-20T10:50:00.000Z"),
-            ("s/talk-outline-p6q7r8", "Talk outline", "2026-11-20T08:40:00.000Z"),
-            ("s/budget-review-s9t0u1", "Budget review", "2026-11-20T06:30:00.000Z"),
-            ("s/book-club-v2w3x4", "Book club picks", "2026-11-20T04:41:00.000Z"),
-            ("s/workout-log-y5z6a7", "Workout log", "2026-11-20T02:30:00.000Z"),
-            ("s/gift-list-b8c9d0", "Gift list", "2026-11-19T22:50:00.000Z"),
-            ("s/home-inventory-e1f2g3", "Home inventory", "2026-11-19T20:40:00.000Z"),
-            ("s/ideas-inbox-h4i5j6", "Ideas inbox", "2026-11-19T18:30:00.000Z"),
+    ///
+    /// Canonical mirror: ids/titles match lenses/docs/fixtures.ts row-for-row
+    /// (see its header for the cross-side contract). updatedAt is generated
+    /// relative to now with the same minutes-ago offsets, so ?mokiDoc pins
+    /// and "within last day" hold under MOKI_FIXTURES=1 at any wall-clock
+    /// time.
+    public static func craftRecents(now: Date = Date()) -> [DocItem] {
+        let seeds: [(id: String, title: String, minutesAgo: Double)] = [
+            ("s/launch-checklist-a1b2c3", "Launch checklist", 35),
+            ("s/essay-draft-d4e5f6", "Essay draft", 80),
+            ("s/trip-itinerary-g7h8i9", "Trip itinerary", 160),
+            ("s/reading-notes-j0k1l2", "Reading notes", 240),
+            ("s/garden-plan-m3n4o5", "Garden plan", 330),
+            ("s/talk-outline-p6q7r8", "Talk outline", 450),
+            ("s/budget-review-s9t0u1", "Budget review", 570),
+            ("s/book-club-v2w3x4", "Book club picks", 690),
+            ("s/workout-log-y5z6a7", "Workout log", 810),
+            ("s/gift-list-b8c9d0", "Gift list", 930),
+            ("s/home-inventory-e1f2g3", "Home inventory", 1050),
+            ("s/ideas-inbox-h4i5j6", "Ideas inbox", 1180),
         ]
         return seeds.map {
             DocItem(
                 id: $0.id, title: $0.title, source: .craft,
-                updatedAt: $0.updatedAt, openUrl: "https://www.craft.do/\($0.id)")
+                updatedAt: iso8601String(now.addingTimeInterval(-$0.minutesAgo * 60)),
+                openUrl: "https://www.craft.do/\($0.id)")
         }
     }
 }
