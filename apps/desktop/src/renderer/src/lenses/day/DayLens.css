@@ -437,6 +437,23 @@
   backdrop-filter: blur(var(--moki-glass-blur));
 }
 
+/* Hover/focus-only toggle for the hidden pill: invisible at rest so the
+ * tile stays a clean frame, reachable by mouse and keyboard alike. */
+.moki-day-webview-reveal {
+  position: absolute;
+  top: var(--moki-space-8);
+  right: var(--moki-space-8);
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.moki-day-webview:hover .moki-day-webview-reveal,
+.moki-day-webview:focus-within .moki-day-webview-reveal {
+  opacity: 1;
+  visibility: visible;
+}
+
 .moki-day-webview-address {
   display: flex;
   min-width: 0;
@@ -476,7 +493,7 @@
  * it visible behind; the card floats centered with the tile's glass
  * treatment. All color from ui/tokens.css — no raw values here. */
 .moki-peek-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 60;
   display: flex;

@@ -1,12 +1,13 @@
-import { createElement, useState, type FormEvent } from 'react'
+import { createElement, useCallback, useState, type FormEvent } from 'react'
 import { getBridge } from '../../../rpc/bridge'
 import { IconButton, Text } from '../../../ui'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { WebPeek } from './WebPeek'
-import { useSandboxedWebview, useWebviewPopup } from './useWebviewGuest'
+import { useSandboxedWebview, useWebviewContextMenu, useWebviewPopup } from './useWebviewGuest'
 import {
   normalizeAddress,
   validateWebviewHome,
+  WEBVIEW_GUEST_ATTRS,
   WEBVIEW_HOME_DEFAULT,
   WEBVIEW_STORAGE_KEY
 } from './webviewShared'
@@ -27,22 +28,43 @@ export function initialPeekUrl(): string | null {
 /* Web widget: a sandboxed <webview> under a floating pill (Back / Forward /
  * Reload / address field / Open in browser). Popups and target=_blank links
  * open in an Arc-style Peek over the board instead of leaving the app; the
- * home URL persists per widget, and in-page navigation follows it along. */
+ * home URL persists per widget, and in-page navigation follows it along.
+ *
+ * The pill is hidden until toggled — the tile is a clean frame otherwise.
+ * Right-click anywhere on the widget reveals it (guest right-clicks arrive
+ * over `web.contextMenu`; tile-chrome ones toggle here, except inside the
+ * pill, which keeps its native menus). A hover-reveal button in the tile
+ * corner is the keyboard/screen-reader path, with aria-expanded.
+ *
+ * The guest's loaded URL commits on user intent only (submit, Expand).
+ * Following guest navigations into `src` would make React rewrite it on
+ * every redirect or param change and reload the page out from under
+ * itself (stuck skeletons); did-navigate updates the draft and the
+ * persisted home so a restart resumes position, without touching src. */
 export function WebViewWidget(): React.JSX.Element {
   const [home, setHome] = usePersistentState<string>(
     WEBVIEW_STORAGE_KEY,
     validateWebviewHome,
     WEBVIEW_HOME_DEFAULT
   )
+  const [committed, setCommitted] = useState<string>(home)
   const [draft, setDraft] = useState<string>(home)
   const [rejected, setRejected] = useState(false)
+  const [toolbarVisible, setToolbarVisible] = useState(false)
   const [peek, setPeek] = useState<string | null>(initialPeekUrl)
 
-  /* Guest wiring (partition, sandbox, allowlist, listeners) lives in the
-   * shared hook; the tile only says what navigation means. Popups arrive
-   * over `web.popup` (main denied the native window): validated again here
-   * before anything loads. */
-  const { setView, go } = useSandboxedWebview({
+  /* User-intended navigations commit all three: the loaded guest, the
+   * persisted home, and the draft. Guest navigations deliberately skip
+   * `committed` (see onNavigate) — one function so the three can't drift. */
+  const commitUrl = useCallback(
+    (url: string) => {
+      setCommitted(url)
+      setHome(url)
+      setDraft(url)
+    },
+    [setHome]
+  )
+  const { setView, go, isOwnGuest } = useSandboxedWebview({
     onNavigate: (url) => {
       setHome(url)
       setDraft(url)
@@ -52,6 +74,22 @@ export function WebViewWidget(): React.JSX.Element {
   /* Popup route: main denied the native window and forwarded the URL;
    * the hook re-validates before anything loads. */
   useWebviewPopup(setPeek)
+  /* Toolbar toggle: guest right-clicks arrive over `web.contextMenu`
+   * (guest input never reaches the DOM). Chrome-area right-clicks toggle
+   * here too, except inside the pill itself — the address field keeps its
+   * native cut/copy/paste menu. */
+  const toggleToolbar = useCallback(() => setToolbarVisible((visible) => !visible), [])
+  useWebviewContextMenu(toggleToolbar, isOwnGuest)
+
+  /* Tile-chrome right-clicks toggle the pill. The pill itself opts out
+   * (stopPropagation below) so its inputs keep their native menus. */
+  const handleTileContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      toggleToolbar()
+    },
+    [toggleToolbar]
+  )
 
   function openOutside(): void {
     getBridge()?.openExternal(home).catch(() => undefined)
@@ -61,8 +99,7 @@ export function WebViewWidget(): React.JSX.Element {
    * key remounts the peek per popup, so a second popup never inherits the
    * first one's title bar or Expand target. */
   function expandPeek(url: string): void {
-    setHome(url)
-    setDraft(url)
+    commitUrl(url)
     setPeek(null)
   }
 
@@ -74,13 +111,31 @@ export function WebViewWidget(): React.JSX.Element {
       return
     }
     setRejected(false)
-    setHome(next)
-    setDraft(next)
+    commitUrl(next)
   }
 
   return (
-    <div className="moki-day-webview" data-testid="day-webview">
-      <div className="moki-day-webview-pill" role="toolbar" aria-label="Web controls">
+    <div
+      className="moki-day-webview"
+      data-testid="day-webview"
+      onContextMenu={handleTileContextMenu}
+    >
+      <IconButton
+        icon="ellipsis"
+        label={toolbarVisible ? 'Hide web controls' : 'Show web controls'}
+        aria-expanded={toolbarVisible}
+        size="sm"
+        iconSize={16}
+        className="moki-day-webview-reveal"
+        onClick={toggleToolbar}
+      />
+      {toolbarVisible && (
+        <div
+          className="moki-day-webview-pill"
+          role="toolbar"
+          aria-label="Web controls"
+          onContextMenu={(e) => e.stopPropagation()}
+        >
         <IconButton icon="chevron-left" label="Back" size="sm" iconSize={16} onClick={() => go('back')} />
         <IconButton
           icon="chevron-right"
@@ -109,7 +164,8 @@ export function WebViewWidget(): React.JSX.Element {
           iconSize={16}
           onClick={openOutside}
         />
-      </div>
+        </div>
+      )}
       {rejected && (
         <Text variant="small" as="p" className="moki-day-webview-error" role="alert">
           Only http and https addresses load here
@@ -124,7 +180,10 @@ export function WebViewWidget(): React.JSX.Element {
         ref: setView,
         className: 'moki-day-webview-frame',
         'data-testid': 'day-webview-frame',
-        src: home
+        /* Committed on user intent only (submit, Expand) — never on
+         * guest navigations, which would reload the page under itself. */
+        src: committed,
+        ...WEBVIEW_GUEST_ATTRS
       })}
       {peek !== null && <WebPeek key={peek} url={peek} onClose={() => setPeek(null)} onExpand={expandPeek} />}
     </div>

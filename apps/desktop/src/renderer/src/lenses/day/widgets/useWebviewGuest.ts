@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { onBridge } from '../../../rpc/bridge'
-import { normalizeAddress, WEBVIEW_PARTITION, WEBVIEW_PREFS } from './webviewShared'
+import { normalizeAddress } from './webviewShared'
 
 /* Minimal webview surface: jsdom has no <webview>, so every method is
  * optional and every call is guarded. */
@@ -8,6 +8,7 @@ export interface WebviewGuestElement extends HTMLElement {
   goBack?(): void
   goForward?(): void
   reload?(): void
+  getWebContentsId?(): number
 }
 
 export interface WebviewGuestEvents {
@@ -35,9 +36,33 @@ export function useWebviewPopup(onPopup: (url: string) => void): void {
   )
 }
 
+/* Guest right-click route: main forwards the guest's `context-menu` as a
+ * signal carrying its webContentsId. The tile toggles its toolbar only
+ * for its own guest's signals — its Peek's guest is a different id and is
+ * ignored. Unknown or id-less signals never toggle. */
+export function useWebviewContextMenu(onToggle: () => void, isOwnGuest: (id: unknown) => boolean): void {
+  const onToggleRef = useRef(onToggle)
+  const isOwnGuestRef = useRef(isOwnGuest)
+  useEffect(() => {
+    onToggleRef.current = onToggle
+    isOwnGuestRef.current = isOwnGuest
+  })
+  useEffect(
+    () =>
+      onBridge('web.contextMenu', (params: unknown) => {
+        const guestId = (params as { guestId?: unknown } | null | undefined)?.guestId
+        if (!isOwnGuestRef.current(guestId)) return
+        onToggleRef.current()
+      }),
+    []
+  )
+}
+
 /* Shared sandboxed <webview> guest capability for the Day Web tile and its
- * Peek overlay: one place for the partition/sandbox/allowpopups attributes,
- * the allowlist validation, and the navigation listener wiring.
+ * Peek overlay: one place for the allowlist validation and the navigation
+ * listener wiring. The guest attributes live in WEBVIEW_GUEST_ATTRS
+ * (webviewShared) and are applied declaratively at both createElement
+ * call sites, present before the guest is created.
  *
  * Popups need `allowpopups` on the element or Chromium swallows them before
  * anything fires. The renderer-side `new-window` webview event was removed
@@ -52,6 +77,7 @@ export function useWebviewPopup(onPopup: (url: string) => void): void {
 export function useSandboxedWebview(events: WebviewGuestEvents): {
   setView: (el: WebviewGuestElement | null) => void
   go: (where: 'back' | 'forward' | 'reload') => void
+  isOwnGuest: (id: unknown) => boolean
 } {
   const viewRef = useRef<WebviewGuestElement | null>(null)
   const eventsRef = useRef(events)
@@ -84,16 +110,10 @@ export function useSandboxedWebview(events: WebviewGuestEvents): {
       }
       viewRef.current = el
       if (!el) return
-      try {
-        el.setAttribute('partition', WEBVIEW_PARTITION)
-        el.setAttribute('sandbox', '')
-        el.setAttribute('webpreferences', WEBVIEW_PREFS)
-        /* Without this Chromium swallows window.open/target=_blank before
-         * main ever sees the popup — sign-in buttons silently do nothing. */
-        el.setAttribute('allowpopups', '')
-      } catch {
-        /* Attribute writes never fail in practice — stay quiet. */
-      }
+      /* Attributes (partition/sandbox/webpreferences/allowpopups) are
+       * declarative JSX props on the element, set before attach: the
+       * popup permission in particular may only be read at guest
+       * creation, so setting it here would be too late. */
       el.addEventListener('did-navigate', onNavigate)
       el.addEventListener('did-navigate-in-page', onInPage)
     },
@@ -110,5 +130,17 @@ export function useSandboxedWebview(events: WebviewGuestEvents): {
     }
   }, [])
 
-  return { setView, go }
+  /* Whether a main-routed signal came from this hook's live guest.
+   * Read lazily: the id exists only once the guest is attached, and the
+   * node can be replaced under us. Unknown guests never match. */
+  const isOwnGuest = useCallback((id: unknown): boolean => {
+    try {
+      const mine = viewRef.current?.getWebContentsId?.()
+      return typeof mine === 'number' && mine === id
+    } catch {
+      return false
+    }
+  }, [])
+
+  return { setView, go, isOwnGuest }
 }

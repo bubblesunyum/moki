@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { initialPeekUrl, WebViewWidget } from './WebViewWidget'
 import { WebPeek } from './WebPeek'
+import { SHELL_CONTENT_CLASS } from '../../../shell/Shell'
 import { hostOf, isSecureUrl, normalizeAddress, WEBVIEW_HOME_DEFAULT } from './webviewShared'
 
 function emit(el: Element, type: string, url: string, extra?: Record<string, unknown>): void {
@@ -14,7 +15,7 @@ function setMockBridge(): { openExternal: ReturnType<typeof vi.fn> } {
   popupHandlers.length = 0
   ;(window as unknown as { moki: unknown }).moki = {
     openExternal,
-    on: (event: string, cb: (params: { url: string }) => void) => {
+    on: (event: string, cb: (...args: never[]) => void) => {
       if (event === 'web.popup') popupHandlers.push(cb as (params: unknown) => void)
       return () => {}
     }
@@ -139,10 +140,13 @@ describe('WebViewWidget peek', () => {
     expect(screen.queryByTestId('web-peek')).toBeNull()
   })
 
-  it('dismisses on backdrop click, X and Escape', () => {
+  it('dismisses on backdrop left-click, X and Escape — never right-click', () => {
     setMockBridge()
     render(<WebViewWidget />)
     firePopup('https://example.com/auth')
+    /* Right button on the dim surround is not a dismiss. */
+    fireEvent.mouseDown(screen.getByTestId('web-peek'), { button: 2 })
+    expect(screen.queryByTestId('web-peek')).not.toBeNull()
     fireEvent.mouseDown(screen.getByTestId('web-peek'))
     expect(screen.queryByTestId('web-peek')).toBeNull()
 
@@ -153,6 +157,17 @@ describe('WebViewWidget peek', () => {
     firePopup('https://example.com/auth')
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByTestId('web-peek')).toBeNull()
+  })
+
+  it('keeps Peek right-clicks out of the tile toggle', () => {
+    setMockBridge()
+    render(<WebViewWidget />)
+    firePopup('https://example.com/a')
+    /* Portal events bubble through the React tree: the Peek stops its
+     * own right-clicks so the tile never sees them. */
+    fireEvent.contextMenu(screen.getByTestId('web-peek'))
+    expect(screen.queryByTestId('web-peek')).not.toBeNull()
+    expect(screen.queryByLabelText('Web address')).toBeNull()
   })
 
   it('expand promotes the peeked page into the tile', () => {
@@ -190,6 +205,33 @@ describe('WebViewWidget peek', () => {
     cleanup()
     render(<WebPeek url="https://paywall.example/login" onClose={() => {}} onExpand={() => {}} />)
     expect(document.body.querySelector('[data-testid="web-peek"]')?.innerHTML).toContain('lucide-lock')
+  })
+
+  it('portals into the shell content area when present at mount', () => {
+    document.body.innerHTML = `<main class="${SHELL_CONTENT_CLASS}"></main>`
+    try {
+      render(<WebPeek url="https://example.com/a" onClose={() => {}} onExpand={() => {}} />)
+      expect(document.querySelector(`.${SHELL_CONTENT_CLASS} [data-testid="web-peek"]`)).not.toBeNull()
+    } finally {
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('keeps a stable portal target once mounted (no guest-destroying flip)', () => {
+    const { rerender } = render(<WebPeek url="https://example.com/a" onClose={() => {}} onExpand={() => {}} />)
+    expect(document.body.querySelector('[data-testid="web-peek"]')).not.toBeNull()
+    /* Shell mounts late (first-paint capture path): the peek must stay
+     * where it mounted instead of moving and destroying the guest. */
+    const shell = document.createElement('main')
+    shell.setAttribute('class', SHELL_CONTENT_CLASS)
+    document.body.appendChild(shell)
+    try {
+      rerender(<WebPeek url="https://example.com/a" onClose={() => {}} onExpand={() => {}} />)
+      expect(document.body.querySelector('[data-testid="web-peek"]')).not.toBeNull()
+      expect(shell.querySelector('[data-testid="web-peek"]')).toBeNull()
+    } finally {
+      shell.remove()
+    }
   })
 
   it('a second popup retitles and re-targets Expand instead of going stale', () => {
@@ -243,6 +285,7 @@ describe('WebViewWidget peek', () => {
   it('traps Tab inside the card and returns focus to the tile on dismiss', () => {
     setMockBridge()
     render(<WebViewWidget />)
+    fireEvent.contextMenu(screen.getByTestId('day-webview'))
     const input = screen.getByLabelText('Web address') as HTMLInputElement
     input.focus()
     firePopup('https://example.com/a')

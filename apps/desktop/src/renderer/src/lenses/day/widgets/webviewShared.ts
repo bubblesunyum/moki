@@ -7,6 +7,18 @@ export const WEBVIEW_HOME_DEFAULT = 'https://example.com'
 export const WEBVIEW_PARTITION = 'persist:moki-websites'
 export const WEBVIEW_PREFS = 'contextIsolation=yes, sandbox=yes'
 
+/* The four guest attributes, one place: partition and webpreferences only
+ * take effect at guest creation, and the popup permission may too — so
+ * both guests apply these declaratively (see the createElement calls),
+ * never via setAttribute after attach. Forget `allowpopups` and popups
+ * die silently. */
+export const WEBVIEW_GUEST_ATTRS = {
+  partition: WEBVIEW_PARTITION,
+  sandbox: '',
+  webpreferences: WEBVIEW_PREFS,
+  allowpopups: ''
+} as const
+
 /* https-only allowlist: explicit http(s) URLs pass through as typed, bare
  * hosts gain an https:// scheme, everything else is rejected and nothing
  * loads (no javascript:, data:, file:, ftp:, or scheme-relative games). */

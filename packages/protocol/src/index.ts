@@ -118,6 +118,11 @@ export interface RpcNotificationMap {
    * denies the native window; the Day Web tile opens it as a Peek after
    * re-validating the URL with its strict allowlist. */
   'web.popup': { url: string }
+  /* A right-click landed on a webview guest page (the embedder never sees
+   * guest input). The Day Web tile toggles its toolbar on it. Carries the
+   * guest's webContentsId so the tile ignores other guests' signals
+   * (notably its own Peek's). */
+  'web.contextMenu': { guestId: number }
 }
 
 /** Live Day-lens entries served by the Electron main process. */

@@ -5,8 +5,10 @@ import { Sidebar } from './Sidebar'
 import { useShell } from './ShellProvider'
 import './Shell.css'
 
-/* Window grid: sidebar | content | inspector with 12px outer padding and
- * 12px gutters. Columns fill the viewport height minus padding. */
+/* Webview portal target: the shell content column. The Day lens ports its
+ * Peek here so the overlay covers the screen area only — never the
+ * sidebar or inspector. Owns the contract both sides query. */
+export const SHELL_CONTENT_CLASS = 'moki-shell-content'
 export function Shell(): React.JSX.Element {
   const { activeLens, showPrimitives } = useShell()
   const lens = lensById(activeLens)
@@ -16,7 +18,7 @@ export function Shell(): React.JSX.Element {
   return (
     <div className="moki-shell">
       <Sidebar />
-      <main className="moki-shell-content" data-testid="shell-content">
+      <main className={SHELL_CONTENT_CLASS} data-testid="shell-content">
         {showDevPage ? <PrimitivesPage /> : <Active />}
       </main>
       <Inspector />

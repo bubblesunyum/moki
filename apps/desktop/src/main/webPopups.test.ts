@@ -30,22 +30,35 @@ interface FakeHandler {
 
 interface FakeContents {
   __owner?: FakeOwnerWindow | null
+  id: number
   getType(): string
   hostWebContents: unknown
   setWindowOpenHandler(handler: FakeHandler): void
+  on(event: string, cb: (...args: never[]) => void): void
 }
 
-function makeGuest(owner: FakeContents['__owner'] = null): { contents: FakeContents; handler: () => FakeHandler } {
+let nextGuestId = 1
+
+function makeGuest(owner: FakeContents['__owner'] = null): {
+  contents: FakeContents
+  handler: () => FakeHandler
+  emit: (event: string) => void
+} {
   let handler: FakeHandler = () => ({ action: 'deny' })
+  const listeners = new Map<string, (...args: never[]) => void>()
   const contents: FakeContents = {
     __owner: owner,
+    id: nextGuestId++,
     getType: () => 'webview',
     hostWebContents: { __owner: owner },
     setWindowOpenHandler: (h: FakeHandler): void => {
       handler = h
+    },
+    on: (event: string, cb: (...args: never[]) => void): void => {
+      listeners.set(event, cb)
     }
   }
-  return { contents, handler: () => handler }
+  return { contents, handler: () => handler, emit: (event: string) => listeners.get(event)?.() }
 }
 
 function emitCreated(contents: FakeContents): void {
@@ -96,13 +109,31 @@ describe('setupWebviewPopups', () => {
   it('ignores non-webview contents and ownerless guests', () => {
     const plain = {
       getType: () => 'browser-window',
-      setWindowOpenHandler: vi.fn()
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn()
     }
     emitCreated(plain as never)
     expect(plain.setWindowOpenHandler).not.toHaveBeenCalled()
     const { contents, handler } = makeGuest(null)
     emitCreated(contents)
     expect(handler()({ url: 'https://example.com/' })).toEqual({ action: 'deny' })
+    expect(sendCalls).toHaveLength(0)
+  })
+
+  it('forwards guest right-clicks with the guest id', () => {
+    const owner = makeOwner()
+    const { contents, emit } = makeGuest(owner)
+    emitCreated(contents)
+    emit('context-menu')
+    expect(sendCalls).toEqual([
+      { channel: 'rpc:notify', method: 'web.contextMenu', params: { guestId: contents.id } }
+    ])
+  })
+
+  it('ignores guest right-clicks with no live owner', () => {
+    const { contents, emit } = makeGuest(null)
+    emitCreated(contents)
+    emit('context-menu')
     expect(sendCalls).toHaveLength(0)
   })
 })
