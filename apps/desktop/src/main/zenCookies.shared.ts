@@ -7,8 +7,8 @@
 
 export const ZEN_COOKIES_CHANNEL = 'zen-cookies:import'
 
-/* The literal lives in packages/protocol — the renderer cutover
- * (webviewShared.WEBVIEW_PARTITION) is a follow-up owned by another worker.
+/* The literal lives in packages/protocol (re-exported below) — including
+ * the renderer's webviewShared.WEBVIEW_PARTITION alias.
  * Cookies land here so Docs previews (and future tabs) start signed in. */
 export { WEBSITES_PARTITION as SHARED_WEB_SESSION_PARTITION } from '../../../../packages/protocol/src/index'
 

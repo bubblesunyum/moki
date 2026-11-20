@@ -22,8 +22,8 @@ import type { DownloadItem, WebContents } from 'electron'
 import { isExternalHttpUrl, WEBSITES_PARTITION } from '../../../../packages/protocol/src/index'
 
 /* Re-exported so existing importers keep one source: the literal lives in
- * packages/protocol, not here. The renderer's WEBVIEW_PARTITION
- * (day/widgets/webviewShared.ts) must stay this same string — follow-up. */
+ * packages/protocol, not here — including the renderer's
+ * day/widgets/webviewShared.ts, which aliases it as WEBVIEW_PARTITION. */
 export { WEBSITES_PARTITION }
 
 export interface WebDownloadNotice {

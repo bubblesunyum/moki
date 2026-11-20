@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { WebViewWidget } from './WebViewWidget'
 import {
   WEBVIEW_HOME_DEFAULT,
-  WEBVIEW_PARTITION,
   WEBVIEW_STORAGE_KEY,
   normalizeAddress
 } from './webviewShared'
+import { WEBSITES_PARTITION } from '../../../../../../../../packages/protocol/src/index'
 
 afterEach(() => cleanup())
 beforeEach(() => window.localStorage.clear())
@@ -82,7 +82,7 @@ describe('WebViewWidget', () => {
     )
     const frame = screen.getByTestId('day-webview-frame')
     expect(frame.getAttribute('src')).toBe('https://example.com/inbox')
-    expect(frame.getAttribute('partition')).toBe(WEBVIEW_PARTITION)
+    expect(frame.getAttribute('partition')).toBe(WEBSITES_PARTITION)
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(frame.getAttribute('allowpopups')).toBe('')
   })

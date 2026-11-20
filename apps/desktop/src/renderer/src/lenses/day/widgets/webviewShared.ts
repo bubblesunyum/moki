@@ -1,15 +1,16 @@
+import { WEBSITES_PARTITION } from '../../../../../../../../packages/protocol/src/index'
+
 /* Shared webview plumbing for the Day Web tile, its Peek overlay, and the
  * Docs preview pane. Pure address helpers plus the sandbox constants, so all
  * surfaces load with the same partition, prefs and https-only allowlist.
  *
  * Main-process half: apps/desktop/src/main/web-session.ts owns the session
- * (permissions, downloads, nav guards). The partition string below must stay
- * identical to WEBSITES_PARTITION there — guest attributes only take effect
- * at creation, so a mismatch would silently split the cookie jar. */
+ * (permissions, downloads, nav guards). The partition string is defined once
+ * in packages/protocol — guest attributes only take effect at creation, so
+ * a mismatch would silently split the cookie jar. */
 
 export const WEBVIEW_STORAGE_KEY = 'moki.day.webview.home'
 export const WEBVIEW_HOME_DEFAULT = 'https://example.com'
-export const WEBVIEW_PARTITION = 'persist:moki-websites'
 export const WEBVIEW_PREFS = 'contextIsolation=yes, sandbox=yes'
 
 /* The four guest attributes, one place: partition and webpreferences only
@@ -18,7 +19,7 @@ export const WEBVIEW_PREFS = 'contextIsolation=yes, sandbox=yes'
  * never via setAttribute after attach. Forget `allowpopups` and popups
  * die silently. */
 export const WEBVIEW_GUEST_ATTRS = {
-  partition: WEBVIEW_PARTITION,
+  partition: WEBSITES_PARTITION,
   sandbox: '',
   webpreferences: WEBVIEW_PREFS,
   allowpopups: ''
