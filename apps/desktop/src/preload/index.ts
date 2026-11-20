@@ -3,6 +3,10 @@ import {
   isExternalHttpUrl,
   type MokiApi
 } from '../../../../packages/protocol/src/index'
+import {
+  ZEN_COOKIES_CHANNEL,
+  type ZenCookieImportStatus
+} from '../main/zenCookies.shared'
 
 // Sandbox-compatible preload: no Node APIs here, only contextBridge +
 // ipcRenderer. Types and the URL check come from packages/protocol; the
@@ -33,3 +37,20 @@ const api: MokiApi = {
 }
 
 contextBridge.exposeInMainWorld('moki', api)
+
+/* Additive Zen cookie-import status surface (mok-8uu.5). Separate global so
+ * the MokiApi/protocol contract is untouched. Main returns status only —
+ * per-host-group ok/failed plus counts; cookie names, hosts and values
+ * never cross into the renderer. */
+contextBridge.exposeInMainWorld('mokiZenCookies', {
+  importCookies: (): Promise<ZenCookieImportStatus> =>
+    ipcRenderer.invoke(ZEN_COOKIES_CHANNEL) as Promise<ZenCookieImportStatus>
+})
+
+declare global {
+  interface Window {
+    mokiZenCookies?: {
+      importCookies: () => Promise<ZenCookieImportStatus>
+    }
+  }
+}
