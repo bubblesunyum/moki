@@ -1,6 +1,11 @@
-/* Shared webview plumbing for the Day Web tile and its Peek overlay.
- * Pure address helpers plus the sandbox constants, so both surfaces load
- * with the same partition, prefs and https-only allowlist. */
+/* Shared webview plumbing for the Day Web tile, its Peek overlay, and the
+ * Docs preview pane. Pure address helpers plus the sandbox constants, so all
+ * surfaces load with the same partition, prefs and https-only allowlist.
+ *
+ * Main-process half: apps/desktop/src/main/web-session.ts owns the session
+ * (permissions, downloads, nav guards). The partition string below must stay
+ * identical to WEBSITES_PARTITION there — guest attributes only take effect
+ * at creation, so a mismatch would silently split the cookie jar. */
 
 export const WEBVIEW_STORAGE_KEY = 'moki.day.webview.home'
 export const WEBVIEW_HOME_DEFAULT = 'https://example.com'

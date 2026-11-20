@@ -1,5 +1,8 @@
 import { app, BrowserWindow } from 'electron'
-import { isExternalHttpUrl } from '../../../../packages/protocol/src/index'
+/* The popup verdict comes from the central web-session module, so the route
+ * and the session hardener can never disagree: http(s) forwards to the Peek,
+ * everything else denies. */
+import { decidePopupUrl } from './web-session'
 
 /* Webview popups, Electron 45 path. The renderer-side `new-window` webview
  * event was removed in Electron 22, so a renderer listener never fires —
@@ -60,7 +63,7 @@ export function setupWebviewPopups(): void {
       const host = hostOfUrl(url)
       log(`window-open host=${host} disposition=${disposition}`)
       try {
-        if (isExternalHttpUrl(url)) {
+        if (decidePopupUrl(url) === 'allow') {
           notifyOwner('web.popup', { url })
           log('forwarded to owner window')
         } else {
