@@ -36,8 +36,8 @@ describe('DayLens', () => {
     for (const title of ['Standup', 'QWELL', 'Lunch', 'Physio', 'Garden']) {
       expect(screen.getByTitle(new RegExp(title))).toBeDefined()
     }
-    // Board with the Focus sample tile; Up next is gone.
-    expect(widgetOrder()).toEqual(['focus'])
+    // Board with the full widget set; Up next is gone.
+    expect(widgetOrder()).toEqual(['focus', 'clipboard', 'files', 'usage', 'system', 'web'])
     expect(screen.queryByTestId('day-widget-up-next')).toBeNull()
   })
 
@@ -63,7 +63,7 @@ describe('DayLens', () => {
       unmount()
     })
     render(<DayLens />)
-    expect(widgetOrder()).toEqual(['focus'])
+    expect(widgetOrder()).toEqual(['focus', 'clipboard', 'files', 'usage', 'system', 'web'])
     expect(screen.getByRole('slider', { name: 'Resize Focus' }).getAttribute('aria-valuenow')).toBe('11')
   })
 

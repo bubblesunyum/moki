@@ -408,3 +408,256 @@
   outline: 2px solid var(--moki-accent-cyan);
   outline-offset: 2px;
 }
+
+/* Web widget: floating address pill over a sandboxed <webview>. The pill
+ * floats centered over the top of the frame; the frame fills the tile. */
+.moki-day-webview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  min-height: 280px;
+  flex: 1;
+}
+
+.moki-day-webview-pill {
+  position: absolute;
+  top: var(--moki-space-8);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+  max-width: calc(100% - var(--moki-space-24));
+  padding: var(--moki-space-4) var(--moki-space-8);
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-pill);
+  backdrop-filter: blur(var(--moki-glass-blur));
+}
+
+.moki-day-webview-address {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+
+.moki-day-webview-input {
+  width: 100%;
+  min-width: 120px;
+  padding: var(--moki-space-4) var(--moki-space-8);
+  color: var(--moki-color-ink);
+  font-family: var(--moki-font);
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.moki-day-webview-input::placeholder {
+  color: var(--moki-color-faint);
+}
+
+.moki-day-webview-frame {
+  flex: 1;
+  min-height: 240px;
+  border: 0;
+  border-radius: var(--moki-radius-card);
+  background: var(--moki-quiet-fill);
+}
+
+.moki-day-webview-error,
+.moki-day-webview-note {
+  margin: 0;
+}
+
+/* Clipboard / files / focus / usage / system-tools widgets. */
+.moki-clipboard,
+.moki-files,
+.moki-focus,
+.moki-usage,
+.moki-sys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-8);
+  min-width: 0;
+}
+
+.moki-clipboard-search,
+.moki-files-tools,
+.moki-focus-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+}
+
+.moki-clipboard-list,
+.moki-files-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-4);
+}
+
+.moki-clipboard-row,
+.moki-files-row {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+  min-width: 0;
+  padding: var(--moki-space-4) var(--moki-space-8);
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-row);
+}
+
+.moki-clipboard-text,
+.moki-files-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--moki-color-muted);
+}
+
+/* Non-link shelf rows render as plain text, not a button. */
+span.moki-files-name {
+  cursor: default;
+}
+
+.moki-clipboard-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-control);
+  color: var(--moki-color-ink);
+  padding: var(--moki-space-4) var(--moki-space-8);
+}
+
+.moki-clipboard-iconbtn,
+.moki-files-iconbtn,
+.moki-clipboard-clear,
+.moki-files-clear,
+.moki-files-more,
+.moki-focus-buttons button,
+.moki-sys-tool {
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-control);
+  color: var(--moki-color-muted);
+  cursor: pointer;
+  padding: var(--moki-space-4) var(--moki-space-8);
+  font-family: var(--moki-font);
+  font-size: 13px;
+}
+
+.moki-files.is-over {
+  background: var(--moki-selection-fill);
+  border: var(--moki-selection-edge);
+  border-radius: var(--moki-radius-card);
+}
+
+.moki-files-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+}
+
+.moki-files-toggle input {
+  accent-color: var(--moki-accent-cyan);
+}
+
+.moki-focus-settings {
+  display: flex;
+  gap: var(--moki-space-12);
+}
+
+.moki-focus-settings label {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-4);
+}
+
+.moki-focus-settings input {
+  width: 56px;
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-control);
+  color: var(--moki-color-ink);
+  padding: var(--moki-space-4);
+  font-family: var(--moki-font);
+  font-size: 13px;
+}
+
+.moki-usage-row,
+.moki-sys-head {
+  display: flex;
+  align-items: center;
+  gap: var(--moki-space-8);
+}
+
+.moki-sys-head {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  list-style: none;
+}
+
+.moki-sys-head::-webkit-details-marker {
+  display: none;
+}
+
+/* Fixed label column so the bars left-align across rows. */
+.moki-usage-row > :first-child,
+.moki-sys-head > :first-child {
+  min-width: 64px;
+}
+
+.moki-usage-bar,
+.moki-sys-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--moki-radius-pill);
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  overflow: hidden;
+}
+
+.moki-usage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--moki-accent-violet), var(--moki-accent-cyan));
+}
+
+.moki-sys-fill {
+  height: 100%;
+  background: var(--moki-accent-mint);
+}
+
+.moki-sys-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-4);
+}
+
+.moki-sys-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--moki-space-4);
+}
+
+.moki-sys-tools {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
