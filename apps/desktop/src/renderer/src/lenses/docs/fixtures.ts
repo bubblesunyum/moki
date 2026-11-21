@@ -1,8 +1,9 @@
 import type { DocItem, DocSource } from '../../../../../../../packages/protocol/src/index'
 
 /* CANONICAL Docs fixture table — the single source of truth for Docs lens
- * fixtures (12 per source with real open URLs, so the lens UX lands before
- * any network). The Swift helper mirrors this table row-for-row under
+ * fixtures (12 per source; Drive/Notion carry real open URLs, Craft rows
+ * carry an empty openUrl and open natively via their craftdocs:// deepLink,
+ * so the lens UX lands before any network). The Swift helper mirrors this table row-for-row under
  * MOKI_FIXTURES=1 (DriveFixtures.listFiles, notionFixtureRecents,
  * DocsFixtures.craftRecents); the two sides cannot share one file across
  * the TS/Swift boundary, so the id/title/URL lists are pinned by contract
@@ -38,7 +39,9 @@ function craft(id: string, title: string, minutesAgo: number): DocItem {
     title,
     source: 'craft',
     updatedAt: at(minutesAgo),
-    openUrl: `https://docs.craft.do/editor/d/fixture-space/${encodeURIComponent(id)}`,
+    /* No web URL: Craft's web editor renders an empty skeleton shell for
+     * unauthenticated sessions, so Craft rows open natively via deepLink. */
+    openUrl: '',
     deepLink: `craftdocs://open?spaceId=fixture-space&blockId=${id}`
   }
 }
@@ -52,9 +55,8 @@ export const DOC_SOURCE_LABEL: Record<DocSource, string> = {
 }
 
 /* Preview rule shared by the lens: a row previews in the right pane only
- * when it carries an in-pane URL. A Craft row with no web URL (space id
- * unknown) carries only its craftdocs:// deepLink, opens out-of-app, and
- * never touches the selection. */
+ * when it carries an in-pane URL. Craft rows carry no web URL, so they open
+ * out-of-app via their craftdocs:// deepLink and never touch the selection. */
 export function isPreviewable(doc: DocItem): boolean {
   return doc.openUrl !== ''
 }

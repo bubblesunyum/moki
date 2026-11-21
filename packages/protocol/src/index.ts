@@ -110,8 +110,9 @@ export interface DocItem {
   /** ISO8601 last-modified string. */
   updatedAt: string
   /** Absolute http(s) URL opened in the right-pane preview. Empty when the
-   * row has no web URL and opens out-of-app via `deepLink` instead (Craft,
-   * while its space id is unknown). */
+   * row has no web URL and opens out-of-app via `deepLink` instead (every
+   * Craft row: its web editor cannot render unauthenticated, so craft
+   * always opens native). */
   openUrl: string
   /** Optional out-of-app open target (Craft `craftdocs://` deep link).
    * A row with no openUrl opens in the native app via openExternal and
@@ -161,8 +162,8 @@ export interface NotionSetTokenParams {
 
 /** Craft Connect (connect.craft.do): the connection URL is the credential —
  * paste it once, the helper validates it with GET /connection and stores it
- * in its 0600 file. Listing is GET /documents (space order, not recency —
- * the section must not call its rows recent). */
+ * in its 0600 file. Listing is GET /documents?fetchMetadata=true, sorted
+ * last-modified first, so rows carry real dates. */
 export interface CraftConnectSaveParams {
   url: string
 }

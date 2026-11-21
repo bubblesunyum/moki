@@ -6,11 +6,18 @@ import Foundation
 // plus the Craft section listing. The credential never leaves the helper:
 // results carry rows + status, never the URL. No TaskGroup anywhere on this
 // path (see swift-taskgroup-timeout trap): listing is one serial `GET
-// /documents` behind no fan-out, capped at 12 rows for the section.
+// /documents?fetchMetadata=true` behind no fan-out, capped at 12 rows for
+// the section.
+//
+// Craft rows are native-open rows: the web editor cannot render
+// unauthenticated (an empty skeleton + 403 outside the app), so rows carry
+// an empty `openUrl` and open in the native app via `deepLink` — the API's
+// `clickableLink` when it validates as `craftdocs://`, else the hand-built
+// deep link. The preview pane never mounts them.
 
-/// Section cap. `GET /documents` unfiltered returns everything (654 observed
-/// in the live space) in space order — fetch on demand, cap here, and never
-/// sort: the endpoint carries no recency, so section order is space order.
+/// Section cap. `GET /documents?fetchMetadata=true` unfiltered returns
+/// everything (654 observed in the live space) — fetch on demand, sort by
+/// the API's `lastModifiedAt`, cap here.
 let craftRecentsPageSize = 12
 
 public struct CraftService: Sendable {
@@ -104,9 +111,9 @@ public struct CraftService: Sendable {
     /// Serve the Craft section. Never throws: no credential empties the
     /// section into its sign-in state (`signedOut`); every failure lands in
     /// `unreachable` — a dead network never reads as empty-ok. Listing is
-    /// the Connect URL only: one serial `GET /documents`, capped, never
-    /// sorted (the endpoint carries no recency, so section order is space
-    /// order).
+    /// the Connect URL only: one serial `GET /documents?fetchMetadata=true`,
+    /// sorted by the API's `lastModifiedAt` (newest first, stable — undated
+    /// rows keep their space order after the dated ones), capped at 12.
     /// Under fixtures, consult the in-memory fixture auth state: a
     /// fixtures sign-out empties the section into its sign-in state
     /// instead of snapping back to rows.
@@ -126,7 +133,7 @@ public struct CraftService: Sendable {
         switch await CraftClient(baseURL: baseURL, session: session).listDocuments() {
         case .success(let documents):
             let fetchedAt = iso8601String(now())
-            let items = documents.prefix(craftRecentsPageSize).map {
+            let items = craftSortByModified(documents).prefix(craftRecentsPageSize).map {
                 craftDocItem(from: $0, spaceId: credential.spaceId, fetchedAt: fetchedAt)
             }
             return DocsListRecentsResult(items: items, unreachable: false, signedOut: false)
@@ -176,30 +183,55 @@ func craftAppError(for error: CraftClientError) -> Error {
     }
 }
 
-/// One space-ordered document as a shared Docs row. `updatedAt` is the
-/// fetch time — the API exposes no modified dates, so callers must not
-/// present rows as recent. `openUrl` is the web editor when the stored
-/// credential carries a space id; otherwise the row opens out-of-app via
-/// `deepLink`.
-func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: String) -> DocItem {
-    DocItem(
-        id: document.id, title: document.title, source: .craft, updatedAt: fetchedAt,
-        openUrl: craftWebEditorURL(spaceId: spaceId, documentId: document.id) ?? "",
-        deepLink: craftDeepLink(spaceId: spaceId, blockId: document.id))
+/// Stable newest-first ordering by the API's `lastModifiedAt`. Decorated
+/// with the space-order index so the sort never shuffles equals: dated rows
+/// lead (parsed newest first), undated rows keep their original order after
+/// them. Unparseable stamps read as undated rather than dropping the row.
+func craftSortByModified(_ documents: [CraftDocument]) -> [CraftDocument] {
+    documents.enumerated().sorted { lhs, rhs in
+        switch (CraftClient.parseServerTime(lhs.element.lastModifiedAt ?? ""),
+            CraftClient.parseServerTime(rhs.element.lastModifiedAt ?? ""))
+        {
+        case let (l, r) where l == nil && r == nil:
+            return lhs.offset < rhs.offset
+        case (nil, _):
+            return false
+        case (_, nil):
+            return true
+        case let (l?, r?):
+            if l != r { return l > r }
+            return lhs.offset < rhs.offset
+        }
+    }.map(\.element)
 }
 
-/// Craft's web editor for one document (Craft Link Formats):
-/// `https://docs.craft.do/editor/d/<spaceId>/<documentId>`. Nil without a
-/// space id. Both segments percent-encode to the unreserved set, so fixture
-/// ids such as `s/…` encode the same way as the renderer's `encodeURIComponent`.
-func craftWebEditorURL(spaceId: String?, documentId: String) -> String? {
-    guard let spaceId, !spaceId.isEmpty else { return nil }
-    let unreserved = CharacterSet(
-        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-    guard let space = spaceId.addingPercentEncoding(withAllowedCharacters: unreserved),
-        let document = documentId.addingPercentEncoding(withAllowedCharacters: unreserved)
-    else { return nil }
-    return "https://docs.craft.do/editor/d/\(space)/\(document)"
+/// One document as a shared Docs row. `updatedAt` is the API's
+/// `lastModifiedAt` when the stamp parses (the sort's own rule: anything
+/// unparseable reads as undated), else the fetch time — a row never shows
+/// a blank date line while a valid fallback exists. `openUrl` stays empty —
+/// craft rows open in the native app, never in the preview pane — and
+/// `deepLink` prefers the API's `clickableLink` (only when it validates as
+/// a `craftdocs://` URL) over the hand-built deep link.
+func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: String) -> DocItem {
+    let updatedAt =
+        document.lastModifiedAt.flatMap {
+            CraftClient.parseServerTime($0) == nil ? nil : $0
+        } ?? fetchedAt
+    return DocItem(
+        id: document.id, title: document.title, source: .craft,
+        updatedAt: updatedAt,
+        openUrl: "",
+        deepLink: craftNativeDeepLink(for: document, spaceId: spaceId))
+}
+
+/// The API's `clickableLink` wins when it is a `craftdocs://` URL;
+/// anything else (https editor links, garbage) is rejected in favor of the
+/// hand-built deep link, so a non-native target never reaches a row.
+func craftNativeDeepLink(for document: CraftDocument, spaceId: String?) -> String {
+    if let link = document.clickableLink, link.hasPrefix("craftdocs://") {
+        return link
+    }
+    return craftDeepLink(spaceId: spaceId, blockId: document.id)
 }
 
 /// Native-app open target for one document. Built with URLComponents so ids

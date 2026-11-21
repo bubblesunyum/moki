@@ -185,10 +185,10 @@ public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throw
 
 public enum DocsFixtures {
     /// 12 canned Craft rows: ids/titles mirror the renderer's
-    /// `DOC_FIXTURES` craft section. Contract-shaped rows — `openUrl` the
-    /// Craft web editor (previews in the guest like Notion), `deepLink` the
-    /// native-app target — so the lens shell shows content while live listing
-    /// needs a credential.
+    /// `DOC_FIXTURES` craft section. Contract-shaped rows — `openUrl` empty
+    /// (craft rows are native-open rows: the preview pane never mounts
+    /// them), `deepLink` the native-app target — so the lens shell shows
+    /// content while live listing needs a credential.
     ///
     /// Canonical mirror: ids/titles match lenses/docs/fixtures.ts row-for-row
     /// (see its header for the cross-side contract). updatedAt is generated
@@ -216,7 +216,7 @@ public enum DocsFixtures {
             DocItem(
                 id: $0.id, title: $0.title, source: .craft,
                 updatedAt: iso8601String(now.addingTimeInterval(-$0.minutesAgo * 60)),
-                openUrl: craftWebEditorURL(spaceId: "fixture-space", documentId: $0.id) ?? "",
+                openUrl: "",
                 deepLink: "craftdocs://open?spaceId=fixture-space&blockId=\($0.id)")
         }
     }

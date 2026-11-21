@@ -25,8 +25,7 @@ function queryParam(name: string): string | undefined {
  * Presentation, not contract data — it lives here, not in fixtures.ts,
  * and never appears in any section's items (resolved by id outside
  * `all`). Signed-out Craft instead shows the paste-once Connect form; live
- * Craft rows preview like Notion, and only a row with no web URL opens
- * natively via its deepLink. */
+ * Craft rows carry no web URL and open natively via their deepLink. */
 const CRAFT_HOME_DOC: DocItem = {
   id: 'craft-home',
   title: 'Craft',
@@ -244,11 +243,6 @@ function DocSection({
         </Text>
         {showSignOut ? SIGN_OUT_AFFORDANCE[source] : null}
       </div>
-      {source === 'craft' && query.items.length > 0 && (
-        <Text variant="small" tone="muted" as="p" className="moki-docs-craft-note">
-          In space order
-        </Text>
-      )}
       {query.items.map((doc) => (
         <DocRow key={doc.id} doc={doc} selected={doc.id === selectedId} onSelect={onSelect} />
       ))}
@@ -284,9 +278,9 @@ export function DocsLens(): React.JSX.Element {
     return DOC_SOURCES.map((source) => ({ source, query: bySource[source] }))
   }, [drive, notion, craft])
   const all = useMemo(() => sections.flatMap(({ query }) => query.items), [sections])
-  /* Preview-eligible rows only: rows with an openUrl. A row without one
-   * (Craft with no known space id) opens out-of-app and never auto-selects
-   * or resolves as the preview doc. */
+  /* Preview-eligible rows only: rows with an openUrl. Craft rows carry no
+   * web URL and open out-of-app, so they never auto-select or resolve as
+   * the preview doc. */
   const previewable = useMemo(() => all.filter(isPreviewable), [all])
 
   /* A picked row that vanishes (signed-out, refetch) clears the selection —

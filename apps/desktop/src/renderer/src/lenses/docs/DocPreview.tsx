@@ -17,21 +17,30 @@ import type { DocItem } from '../../../../../../../packages/protocol/src/index'
 export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element {
   const [peek, setPeek] = useState<string | null>(null)
   const [current, setCurrent] = useState<string | null>(null)
+  /* Load-state: the guest hard-remounts per pick (key below, deliberate
+   * isolation) and paints white until its page exists — the quiet overlay
+   * covers that flash until the guest's first dom-ready. A same-src reload
+   * reuses the painted page, so the overlay stays down. */
+  const [ready, setReady] = useState(false)
+  const { setView, go } = useSandboxedWebview({
+    onNavigate: (url) => setCurrent(url),
+    onReady: () => setReady(true)
+  })
+  useWebviewPopup(setPeek)
+
   /* Expand target: promoting a peeked page loads it in this pane (the
    * guest's src commits on user intent only — never on guest navigations,
    * which would reload the page out from under itself). Cleared per doc so
    * a new pick never inherits the old page. */
   const [override, setOverride] = useState<string | null>(null)
-  const { setView, go } = useSandboxedWebview({
-    onNavigate: (url) => setCurrent(url)
-  })
-  useWebviewPopup(setPeek)
 
-  /* A new pick replaces the pane: drop any Expand override and retitle. */
+  /* A new pick replaces the pane: drop any Expand override, retitle, and
+   * raise the loading overlay for the incoming page. */
   const docId = doc?.id
   useEffect(() => {
     setOverride(null)
     setCurrent(null)
+    setReady(false)
   }, [docId])
 
   if (doc === null) {
@@ -50,6 +59,9 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
   }
 
   function expandPeek(url: string): void {
+    /* Same as a pick: the expanded URL remounts the guest (key below), so
+     * raise the overlay until the new page's first dom-ready. */
+    setReady(false)
     setOverride(url)
     setCurrent(url)
     setPeek(null)
@@ -78,14 +90,27 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
           onClick={openOutside}
         />
       </div>
-      {createElement('webview', {
-        ref: setView,
-        key: loaded,
-        className: 'moki-docs-preview-frame',
-        'data-testid': 'docs-preview-frame',
-        src: loaded,
-        ...WEBVIEW_GUEST_ATTRS
-      })}
+      <div className="moki-docs-preview-frame-wrap" key={loaded}>
+        {createElement('webview', {
+          ref: setView,
+          className: 'moki-docs-preview-frame',
+          'data-testid': 'docs-preview-frame',
+          src: loaded,
+          ...WEBVIEW_GUEST_ATTRS
+        })}
+        {!ready && (
+          <div
+            className="moki-docs-preview-loading"
+            data-testid="docs-preview-loading"
+            role="status"
+            aria-label="Loading preview"
+          >
+            <Text variant="small" tone="muted" as="p" className="moki-docs-preview-loading-text">
+              Loading…
+            </Text>
+          </div>
+        )}
+      </div>
       {peek !== null && <WebPeek key={peek} url={peek} onClose={() => setPeek(null)} onExpand={expandPeek} />}
     </div>
   )

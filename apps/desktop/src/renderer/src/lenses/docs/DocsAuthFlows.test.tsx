@@ -237,12 +237,13 @@ describe('Docs Google sign-in flow', () => {
 
 describe('Docs Craft Connect form', () => {
   function liveCraftRows(): DocItem[] {
+    // Craft rows carry no web URL: the native app opens via deepLink.
     return [0, 1].map((index) => ({
       id: `craft-live-${index}`,
       title: `Craft live ${index}`,
       source: 'craft' as const,
       updatedAt: new Date(Date.now() - index * 60_000).toISOString(),
-      openUrl: `https://docs.craft.do/editor/d/live-space/craft-live-${index}`,
+      openUrl: '',
       deepLink: `craftdocs://open?blockId=live-${index}`
     }))
   }
@@ -411,7 +412,7 @@ describe('Docs Craft Connect form', () => {
   })
 
   it('rows with no web URL open externally without touching the selection', async () => {
-    // Legacy rows with no known space id carry no web URL: native-app open.
+    // Craft rows carry no web URL: native-app open via deepLink.
     const nativeRows: DocItem[] = [0, 1].map((index) => ({
       id: `craft-live-${index}`,
       title: `Craft live ${index}`,
@@ -433,7 +434,6 @@ describe('Docs Craft Connect form', () => {
     })
     // Copy honesty: the Craft section never calls its rows recent.
     expect(craftSection().textContent).not.toMatch(/recent/i)
-    expect(screen.getByText('In space order')).toBeDefined()
     const before = (screen.getByTestId('docs-preview-frame').getAttribute('src') as string) ?? ''
     expect(before).toBe(DOC_FIXTURES.drive[0].openUrl)
     fireEvent.click(screen.getByTestId('docs-row-craft-live-0'))

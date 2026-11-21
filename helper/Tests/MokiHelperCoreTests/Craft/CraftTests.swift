@@ -241,19 +241,20 @@ struct CraftTests {
         #expect(result == .failure(.unreachable(statusCode: 200)))
     }
 
-    @Test("Documents map in space order, capped by the caller")
+    @Test("Documents map in space order, decoding both metadata shapes")
     func documentsMap() async {
         let json = """
             {"items":[
-             {"id":"d1","title":"First"},
+             {"id":"d1","title":"First","metadata":{"lastModifiedAt":"2026-11-20T10:00:00Z","clickableLink":"craftdocs://open?spaceId=s&documentId=d1"}},
              {"id":"","title":"No id drops"},
-             {"id":"d2","title":""},
+             {"id":"d2","title":"","lastModifiedAt":"2026-11-19T10:00:00Z","clickableLink":"craftdocs://open?spaceId=s&documentId=d2"},
              {"id":"d3","title":"  "},
              {"id":"d4"}
             ]}
             """
         CraftStubURLProtocol.setHandler { request in
-            #expect(request.url?.absoluteString.hasSuffix("/documents") == true)
+            #expect(request.url?.path.hasSuffix("/documents") == true)
+            #expect(request.url?.query?.contains("fetchMetadata=true") == true)
             return (craftHTTPResponse(url: request.url!, status: 200), craftJSONData(json))
         }
         defer { CraftStubURLProtocol.clear() }
@@ -261,12 +262,20 @@ struct CraftTests {
             .listDocuments()
         switch result {
         case .success(let docs):
-            // Space order preserved: no sorting, no recency.
+            // Space order preserved: sorting is the service's job.
             #expect(docs.map(\.id) == ["d1", "d2", "d3", "d4"])
             #expect(docs[0].title == "First")
             #expect(docs[1].title == "(Untitled)")
             #expect(docs[2].title == "(Untitled)")
             #expect(docs[3].title == "(Untitled)")
+            // Nested metadata shape…
+            #expect(docs[0].lastModifiedAt == "2026-11-20T10:00:00Z")
+            #expect(docs[0].clickableLink == "craftdocs://open?spaceId=s&documentId=d1")
+            // …and the top-level shape decode the same fields.
+            #expect(docs[1].lastModifiedAt == "2026-11-19T10:00:00Z")
+            #expect(docs[1].clickableLink == "craftdocs://open?spaceId=s&documentId=d2")
+            #expect(docs[2].lastModifiedAt == nil)
+            #expect(docs[3].clickableLink == nil)
         case .failure:
             Issue.record("documents should decode")
         }
@@ -451,13 +460,33 @@ struct CraftTests {
         #expect(result == DocsListRecentsResult(items: [], unreachable: false, signedOut: true))
     }
 
-    @Test("Listing maps rows, caps at 12, and never claims recency")
+    @Test("Listing sorts by lastModifiedAt, caps at 12, and carries the API's dates")
     func listingMapsRows() async throws {
-        let items = (1...20).map { #"{"id":"d\#($0)","title":"Doc \#($0)"}"# }.joined(separator: ",")
+        // Space order is scrambled on purpose: d-old … d-new arrive
+        // interleaved, with ties (d-tie1/d-tie2), undated rows (d-nodate1/2),
+        // and both metadata nestings. 14 rows so the cap bites.
+        let items = [
+            #"{"id":"d-old","title":"Old","lastModifiedAt":"2026-11-10T10:00:00Z"}"#,
+            #"{"id":"d-tie1","title":"Tie 1","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z"}}"#,
+            #"{"id":"d-nodate1","title":"No date"}"#,
+            #"{"id":"d-new","title":"New","metadata":{"lastModifiedAt":"2026-11-20T10:00:00Z"}}"#,
+            #"{"id":"d-mid","title":"Mid","lastModifiedAt":"2026-11-15T10:00:00Z"}"#,
+            #"{"id":"d-tie2","title":"Tie 2","lastModifiedAt":"2026-11-19T10:00:00Z"}"#,
+            #"{"id":"d-nodate2","title":"No date 2","metadata":{}}"#,
+            #"{"id":"d-tie3","title":"Tie 3","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z"}}"#,
+            #"{"id":"d-08","title":"D8","lastModifiedAt":"2026-11-08T10:00:00Z"}"#,
+            #"{"id":"d-07","title":"D7","lastModifiedAt":"2026-11-07T10:00:00Z"}"#,
+            #"{"id":"d-06","title":"D6","lastModifiedAt":"2026-11-06T10:00:00Z"}"#,
+            #"{"id":"d-05","title":"D5","lastModifiedAt":"2026-11-05T10:00:00Z"}"#,
+            #"{"id":"d-04","title":"D4","lastModifiedAt":"2026-11-04T10:00:00Z"}"#,
+            #"{"id":"d-03","title":"D3","lastModifiedAt":"2026-11-03T10:00:00Z"}"#,
+        ].joined(separator: ",")
         CraftStubURLProtocol.setHandler { request in
-            if request.url?.absoluteString.hasSuffix("/connection") == true {
+            if request.url?.path.hasSuffix("/connection") == true {
                 return (craftHTTPResponse(url: request.url!, status: 200), craftJSONData(craftConnectionJSON))
             }
+            #expect(request.url?.path.hasSuffix("/documents") == true)
+            #expect(request.url?.query?.contains("fetchMetadata=true") == true)
             return (craftHTTPResponse(url: request.url!, status: 200), craftJSONData(#"{"items":[\#(items)]}"#))
         }
         defer { CraftStubURLProtocol.clear() }
@@ -470,15 +499,68 @@ struct CraftTests {
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
         #expect(result.items.count == 12, "the section caps at 12")
-        #expect(result.items.map(\.id) == (1...12).map { "d\($0)" }, "space order, unsorted")
+        // Newest first; ties and undated rows keep their space order.
+        #expect(
+            result.items.map(\.id)
+                == ["d-new", "d-tie1", "d-tie2", "d-tie3", "d-mid", "d-old",
+                    "d-08", "d-07", "d-06", "d-05", "d-04", "d-03"],
+            "lastModifiedAt-desc, stable among ties; the two undated rows sort last and fall off the 12-cap")
         let first = try #require(result.items.first)
         #expect(first.source == .craft)
-        #expect(
-            first.openUrl == "https://docs.craft.do/editor/d/space-1/d1",
-            "a known space id makes the row preview in the webview guest")
-        #expect(first.deepLink == "craftdocs://open?spaceId=space-1&blockId=d1")
-        #expect(first.updatedAt == iso8601String(Date(timeIntervalSince1970: 1_769_000_000)),
-            "fetch-time ISO, not a modified date")
+        #expect(first.openUrl == "", "craft rows are native-open rows: the preview pane never mounts them")
+        #expect(first.deepLink == "craftdocs://open?spaceId=space-1&blockId=d-new")
+        #expect(first.updatedAt == "2026-11-20T10:00:00Z", "the API's date, not fetch time")
+        #expect(result.items.allSatisfy { $0.openUrl.isEmpty })
+        #expect(result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
+    }
+
+    @Test("An unparseable date sorts undated and shows the fetch time")
+    func unparseableDateFallsBackToFetchedAt() {
+        let fetchedAt = "2026-11-21T09:00:00Z"
+        // The sort's rule — unparseable reads as undated — must extend to
+        // the row: a blank meta line never replaces a valid fallback.
+        let garbage = craftDocItem(
+            from: CraftDocument(id: "d-garbage", title: "Garbage", lastModifiedAt: "not-a-date")!,
+            spaceId: nil, fetchedAt: fetchedAt)
+        #expect(garbage.updatedAt == fetchedAt)
+        let dated = craftDocItem(
+            from: CraftDocument(id: "d-ok", title: "OK", lastModifiedAt: "2026-11-20T10:00:00Z")!,
+            spaceId: nil, fetchedAt: fetchedAt)
+        #expect(dated.updatedAt == "2026-11-20T10:00:00Z")
+    }
+
+    @Test("The API's clickableLink wins; anything else falls back to hand-built")
+    func clickableLinkMapping() {
+        let fetchedAt = "2026-11-21T00:00:00Z"
+        // A craftdocs:// clickableLink is trusted verbatim.
+        let api = craftDocItem(
+            from: CraftDocument(
+                id: "d1", title: "T",
+                clickableLink: "craftdocs://open?spaceId=live&documentId=d1")!,
+            spaceId: "space-1", fetchedAt: fetchedAt)
+        #expect(api.deepLink == "craftdocs://open?spaceId=live&documentId=d1")
+        #expect(api.openUrl == "")
+        // An https editor link is rejected — the pane cannot render it.
+        let https = craftDocItem(
+            from: CraftDocument(
+                id: "d2", title: "T",
+                clickableLink: "https://docs.craft.do/editor/d/s/d2")!,
+            spaceId: "space-1", fetchedAt: fetchedAt)
+        #expect(https.deepLink == "craftdocs://open?spaceId=space-1&blockId=d2")
+        #expect(https.openUrl == "")
+        // Garbage never reaches a row either.
+        let garbage = craftDocItem(
+            from: CraftDocument(id: "d3", title: "T", clickableLink: "not a url")!,
+            spaceId: "space-1", fetchedAt: fetchedAt)
+        #expect(garbage.deepLink == "craftdocs://open?spaceId=space-1&blockId=d3")
+        #expect(garbage.openUrl == "")
+        // No metadata at all: the hand-built link, and the fetch time.
+        let bare = craftDocItem(
+            from: CraftDocument(id: "d4", title: "T")!,
+            spaceId: "space-1", fetchedAt: fetchedAt)
+        #expect(bare.deepLink == "craftdocs://open?spaceId=space-1&blockId=d4")
+        #expect(bare.updatedAt == fetchedAt)
+        #expect(bare.openUrl == "")
     }
 
     @Test("A dead network lists as unreachable, never empty-ok")
@@ -512,9 +594,10 @@ struct CraftTests {
         #expect(result.items.count == 12)
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
+        // Native-open rows: no web editor URL, only the craftdocs deep link.
+        #expect(result.items.allSatisfy { $0.openUrl.isEmpty })
         #expect(result.items.allSatisfy {
-            $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/fixture-space/")
-                && ($0.deepLink ?? "").hasPrefix("craftdocs://open?")
+            ($0.deepLink ?? "").hasPrefix("craftdocs://open?")
         })
         // Served path must emit the canonical `s/…` table row-for-row —
         // the same ids `DocsFixtures`, the renderer `DOC_FIXTURES`, and the
@@ -623,20 +706,9 @@ struct CraftTests {
     }
 }
 
-// MARK: - Web editor links
+// MARK: - Sign-out sweep
 
 extension CraftTests {
-    @Test("Web editor URLs need a space id and encode both segments")
-    func webEditorURLs() {
-        #expect(craftWebEditorURL(spaceId: "space-1", documentId: "d1")
-            == "https://docs.craft.do/editor/d/space-1/d1")
-        #expect(craftWebEditorURL(spaceId: "s 1", documentId: "s/x")
-            == "https://docs.craft.do/editor/d/s%201/s%2Fx")
-        #expect(craftWebEditorURL(spaceId: nil, documentId: "d1") == nil)
-        #expect(craftWebEditorURL(spaceId: "", documentId: "d1") == nil)
-    }
-
-    // MARK: - Sign-out sweep
 
     @Test("Sign-out clears the legacy file and both MCP-era keychain accounts")
     func signOutSweepsBothCredentialKinds() async throws {

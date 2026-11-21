@@ -6,10 +6,11 @@ import Foundation
 // talks to the helper through `window.moki.call`, so change both sides
 // together.
 //
-// Craft rows are the shared `DocItem` (`source == .craft`, `openUrl` the web
-// editor once the space id is known, `deepLink` the native-app target); the
-// Craft section envelope is the shared `DocsListRecentsResult` (`items`,
-// `unreachable`, `signedOut`). This area owns only `Craft/**` shapes below.
+// Craft rows are the shared `DocItem` (`source == .craft`, `openUrl` empty
+// — craft rows open in the native app, never in the preview pane —
+// `deepLink` the native-app target); the Craft section envelope is the
+// shared `DocsListRecentsResult` (`items`, `unreachable`, `signedOut`).
+// This area owns only `Craft/**` shapes below.
 
 /// `craftConnect.validate` / `craftConnect.save` params: the pasted
 /// connection string. The URL *is* the credential — it is never echoed back

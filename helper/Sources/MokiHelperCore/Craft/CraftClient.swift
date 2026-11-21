@@ -42,9 +42,10 @@ public enum CraftClientError: Error, Equatable, Sendable {
 }
 
 /// The smallest useful Craft Connect client: validate a connection URL with
-/// `GET /connection`, list documents with `GET /documents`. Listing is one
-/// request and stays one request — no per-document fan-out against the
-/// shared 100 req/60s budget.
+/// `GET /connection`, list documents with `GET /documents?fetchMetadata=true`
+/// (per-item `lastModifiedAt` + `clickableLink`; sorting is the service's
+/// job). Listing is one request and stays one request — no per-document
+/// fan-out against the shared 100 req/60s budget.
 public struct CraftClient: Sendable {
     let baseURL: URL
     let session: URLSession
@@ -117,13 +118,18 @@ public struct CraftClient: Sendable {
         return .success(space)
     }
 
-    /// `GET /documents` — every document in space order (the endpoint has no
-    /// recency; callers cap, never sort). One request, no fan-out.
+    /// `GET /documents?fetchMetadata=true` — every document in space order
+    /// with per-item metadata (`lastModifiedAt`, `clickableLink`). One
+    /// request, no fan-out — the listing stays well inside the shared
+    /// 50 req/10s, 100 req/60s-per-space budgets. Ordering happens in the
+    /// service; the client preserves space order.
     public func listDocuments() async -> Result<[CraftDocument], CraftClientError> {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: craftRequest(path: "documents"))
+            let request = craftRequest(
+                path: "documents", queryItems: [URLQueryItem(name: "fetchMetadata", value: "true")])
+            (data, response) = try await session.data(for: request)
         } catch {
             return .failure(.unreachable(statusCode: nil))
         }
@@ -141,11 +147,15 @@ public struct CraftClient: Sendable {
         else {
             return .failure(.unreachable(statusCode: http.statusCode))
         }
-        return .success(items.compactMap { CraftDocument(id: $0.id, title: $0.title) })
+        return .success(items.compactMap { craftDocument(from: $0) })
     }
 
-    private func craftRequest(path: String) -> URLRequest {
-        var request = URLRequest(url: baseURL.appending(path: path))
+    private func craftRequest(path: String, queryItems: [URLQueryItem] = []) -> URLRequest {
+        var url = baseURL.appending(path: path)
+        if !queryItems.isEmpty {
+            url.append(queryItems: queryItems)
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = craftRequestTimeout
         return request
@@ -187,24 +197,51 @@ public struct CraftClient: Sendable {
 /// `unreachable`, never stall the Docs lens.
 let craftRequestTimeout: TimeInterval = 15
 
-/// One row of `GET /documents` (`{items:[{id,title}]}`). Titles may be
-/// empty strings; id-less rows are dropped upstream (unlinkable). Empty
-/// titles render as `(Untitled)`, matching the Notion mapping.
+/// One row of `GET /documents?fetchMetadata=true`. Titles may be empty
+/// strings; id-less rows are dropped upstream (unlinkable). Empty titles
+/// render as `(Untitled)`, matching the Notion mapping. `lastModifiedAt` is
+/// the API's ISO8601 modified stamp passed through untouched (the renderer
+/// formats it); nil when the item carried none. `clickableLink` is the API's
+/// native-app open target (`craftdocs://open?spaceId&documentId`).
 public struct CraftDocument: Sendable, Equatable {
     public var id: String
     public var title: String
+    public var lastModifiedAt: String?
+    public var clickableLink: String?
 
-    public init?(id: String?, title: String?) {
+    public init?(id: String?, title: String?, lastModifiedAt: String? = nil, clickableLink: String? = nil) {
         guard let id, !id.isEmpty else { return nil }
         self.id = id
         let trimmed = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         self.title = trimmed.isEmpty ? "(Untitled)" : trimmed
+        self.lastModifiedAt = lastModifiedAt.flatMap { $0.isEmpty ? nil : $0 }
+        self.clickableLink = clickableLink.flatMap { $0.isEmpty ? nil : $0 }
     }
+}
+
+struct CraftDocumentMetadata: Decodable {
+    var lastModifiedAt: String?
+    var clickableLink: String?
 }
 
 struct CraftDocumentItem: Decodable {
     var id: String?
     var title: String?
+    var lastModifiedAt: String?
+    var clickableLink: String?
+    var metadata: CraftDocumentMetadata?
+}
+
+/// Best-effort row: the docs pin per-item metadata under either a
+/// `metadata` object or top-level keys, so read both — nested first, then
+/// top-level. An unparseable row still renders, never drops (id-less rows
+/// excepted, same as before).
+func craftDocument(from item: CraftDocumentItem) -> CraftDocument? {
+    CraftDocument(
+        id: item.id,
+        title: item.title,
+        lastModifiedAt: item.metadata?.lastModifiedAt ?? item.lastModifiedAt,
+        clickableLink: item.metadata?.clickableLink ?? item.clickableLink)
 }
 
 struct CraftDocumentsPayload: Decodable {

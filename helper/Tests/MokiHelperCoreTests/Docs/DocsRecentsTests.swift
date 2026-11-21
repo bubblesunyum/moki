@@ -489,12 +489,11 @@ struct DocsRecentsTests {
         let service = DocsRecentsService(
             drive: makeDocsDriveService(home: home), notion: makeDocsNotionService(), craft: craft)
 
-        // Identity mapping: the service's contract rows pass through.
+        // Identity mapping: the service's contract rows pass through —
+        // native-open rows with empty openUrl and a craftdocs deep link.
         let result = await service.listRecents(source: .craft)
         #expect(result.items.count == 12)
-        #expect(result.items.allSatisfy {
-            $0.source == .craft && $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/fixture-space/")
-        })
+        #expect(result.items.allSatisfy { $0.source == .craft && $0.openUrl.isEmpty })
         #expect(result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
@@ -633,11 +632,9 @@ struct DocsRecentsTests {
                         item.openUrl == "https://www.notion.so/\(item.id)",
                         "openUrl drift for \(item.id)")
                 case .craft:
-                    #expect(
-                        item.openUrl
-                            == "https://docs.craft.do/editor/d/fixture-space/"
-                            + item.id.replacingOccurrences(of: "/", with: "%2F"),
-                        "openUrl drift for \(item.id)")
+                    // Native-open rows: no web editor URL — the preview
+                    // pane never mounts them — only the deep link.
+                    #expect(item.openUrl == "", "openUrl drift for \(item.id)")
                     #expect(
                         item.deepLink
                             == "craftdocs://open?spaceId=fixture-space&blockId=\(item.id)",
@@ -665,14 +662,19 @@ struct DocsRecentsTests {
             let result = try await handler(.object(["source": .string(source.rawValue)]))
             #expect(result.items.count == 12, "expected 12 rows for \(source)")
             #expect(result.items.allSatisfy { $0.source == source }, "wrong source for \(source)")
-            #expect(
-                result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
-                "non-https openUrl for \(source)")
             if source == .craft {
-                // Every Craft row carries a native-app deepLink besides its web editor URL.
+                // Craft rows are native-open: empty openUrl plus a
+                // craftdocs deep link, never an https editor URL.
+                #expect(
+                    result.items.allSatisfy { $0.openUrl.isEmpty },
+                    "craft rows must not carry a preview URL for \(source)")
                 #expect(
                     result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") },
                     "non-craftdocs deepLink for \(source)")
+            } else {
+                #expect(
+                    result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
+                    "non-https openUrl for \(source)")
             }
             #expect(result.unreachable == false)
             #expect(result.signedOut == false)

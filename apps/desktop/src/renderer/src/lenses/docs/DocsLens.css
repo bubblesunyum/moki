@@ -57,13 +57,6 @@
   margin: var(--moki-space-8) 0 0;
 }
 
-/* Craft section honesty line (space order, not recent): same inset as the
- * rows, tighter to the head. */
-.moki-docs-craft-note {
-  margin: 0;
-  padding: 0 var(--moki-space-12);
-}
-
 .moki-docs-signout {
   display: flex;
   align-items: center;
@@ -182,7 +175,8 @@
   white-space: nowrap;
 }
 
-/* Right-pane preview: nav bar over a full-height hardened guest. */
+/* Right-pane preview: nav bar over a full-height hardened guest. The frame
+ * wrap is the relative anchor for the load-state overlay. */
 .moki-docs-preview {
   display: flex;
   flex-direction: column;
@@ -211,11 +205,35 @@
   white-space: nowrap;
 }
 
+.moki-docs-preview-frame-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .moki-docs-preview-frame {
   flex: 1;
   min-height: 0;
   width: 100%;
   border: 0;
+}
+
+/* Load-state overlay: a quiet ground fill with one muted line over the
+ * blank guest until its first dom-ready, so a pick reads as loading,
+ * never a white flash. */
+.moki-docs-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--moki-color-ground);
+}
+
+.moki-docs-preview-loading-text {
+  margin: 0;
 }
 
 .moki-docs-empty {

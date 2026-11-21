@@ -1072,10 +1072,22 @@ struct NotionMCPOAuthTests {
         await server.run()
         let output = await transport.collectedOutput()
         #expect(output.count == 3)
-        #expect(output[0].contains("-32000"))
-        #expect(output[0].contains("unavailable in fixtures"))
-        #expect(output[1].contains("\"status\":\"error\""))
-        #expect(output[2].contains("\"ok\":true"))
+        // Responses may arrive out of order (`run()` answers each line in
+        // its own task), so match by request id, never by position — the
+        // mok-d5k flake's Notion twin of the Google suite's fixed test.
+        var byID: [Int: String] = [:]
+        for line in output {
+            guard let data = line.data(using: .utf8),
+                let json = try? JSONDecoder().decode(JSONValue.self, from: data),
+                case .object(let envelope) = json,
+                case .int(let id) = envelope["id"]
+            else { continue }
+            byID[id] = line
+        }
+        #expect(byID[1]?.contains("-32000") == true)
+        #expect(byID[1]?.contains("unavailable in fixtures") == true)
+        #expect(byID[2]?.contains("\"status\":\"error\"") == true)
+        #expect(byID[3]?.contains("\"ok\":true") == true)
     }
 }
 
