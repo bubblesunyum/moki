@@ -220,13 +220,14 @@ describe('DocsLens', () => {
     expect(screen.getByTestId(`docs-row-${live[0].id}`)).toBeDefined()
   })
 
-  it('degrades a failed listing to fixtures with a partial notice', async () => {
+  it('a failed listing renders empty rows with a quiet notice', async () => {
     setBridge(() => Promise.reject(new Error('down')))
     renderLens()
     await waitFor(() => {
-      expect(screen.getAllByText("Couldn't refresh — showing saved list")).toHaveLength(3)
+      expect(screen.getAllByText("Couldn't refresh")).toHaveLength(3)
     })
-    expect(document.querySelectorAll('[data-testid^="docs-row-"]')).toHaveLength(36)
+    // Honesty: no fixture rows posing as the user's docs.
+    expect(document.querySelectorAll('[data-testid^="docs-row-"]')).toHaveLength(0)
   })
 })
 
@@ -248,9 +249,10 @@ describe('DocPreview', () => {
 })
 
 /* Signed-out states (mok-8uu.6/12, mok-68k/0xc): every auth state explains
- * itself and offers its real browser-approval action — Drive, Craft and
- * Notion all share the same sign-in control. Empty-unreachable Craft (no
- * credential to fix) keeps Open Craft loading the home page in the preview. */
+ * itself and offers its real action — Drive and Notion share the
+ * browser-approval sign-in control, Craft offers its paste-once Connect
+ * form. Empty-unreachable Craft (no credential to fix) keeps Open Craft
+ * loading the home page in the preview. */
 describe('Docs signed-out states', () => {
   function signedOutBridge(signedOutSource: DocSource): void {
     setBridge((_method, params) => {
@@ -275,15 +277,16 @@ describe('Docs signed-out states', () => {
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.drive[0].id}`)).toBeNull()
   })
 
-  it('craft signed-out shows the OAuth control, not the preview home', async () => {
+  it('craft signed-out shows the paste form, not the preview home', async () => {
     signedOutBridge('craft')
     renderLens()
     await waitFor(() => {
       expect(screen.getByLabelText('Craft needs sign-in')).toBeDefined()
     })
     expect(screen.getByText('Connect Craft to list docs')).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-    expect(screen.getByText(/Choose a space in Craft/)).toBeDefined()
+    expect(screen.getByLabelText('Craft connection URL')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Validate' })).toBeDefined()
+    expect(screen.getByText('Craft → Settings → API → Create connection')).toBeDefined()
     // A credential fix exists — no Open Craft fallback here.
     expect(screen.queryByRole('button', { name: 'Open Craft' })).toBeNull()
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()

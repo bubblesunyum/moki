@@ -600,8 +600,19 @@ struct GoogleSignInTests {
         let decoded = try output.map {
             try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8))
         }
+        // Responses may arrive out of order (`run()` answers each line in
+        // its own task), so match by request id, never by position.
+        var byID: [Int: JSONValue] = [:]
+        for value in decoded {
+            guard case .object(let envelope) = value,
+                case .int(let id) = envelope["id"]
+            else {
+                continue
+            }
+            byID[id] = value
+        }
         // signInStart: AppError unavailable.
-        guard case .object(let start) = decoded[0],
+        guard case .object(let start) = byID[1],
             case .object(let startError) = start["error"],
             case .int(let startCode) = startError["code"],
             case .object(let startData) = startError["data"],
@@ -615,7 +626,7 @@ struct GoogleSignInTests {
         #expect(appCode == "unavailable")
         #expect(startMessage.contains("unavailable in fixtures"))
         // signInPoll: error status, no browser, no network.
-        guard case .object(let poll) = decoded[1],
+        guard case .object(let poll) = byID[2],
             case .object(let pollResult) = poll["result"],
             case .string(let status) = pollResult["status"]
         else {
@@ -624,7 +635,7 @@ struct GoogleSignInTests {
         }
         #expect(status == "error")
         // signInCancel: ok.
-        guard case .object(let cancel) = decoded[2],
+        guard case .object(let cancel) = byID[3],
             case .object(let cancelResult) = cancel["result"],
             case .bool(let ok) = cancelResult["ok"]
         else {

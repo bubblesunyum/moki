@@ -172,8 +172,8 @@ export interface CraftConnectValidateResult {
   spaceName?: string
 }
 
-/** Shared sign-in poll shape for the Docs OAuth flows (Google, Notion,
- * Craft): start returns at once (the RPC timeout is 15s, so a consent
+/** Shared sign-in poll shape for the Docs OAuth flows (Google, Notion):
+ * start returns at once (the RPC timeout is 15s, so a consent
  * wait can never be one long-poll) and the renderer polls
  * pending/done/error. */
 export type DocsSignInPollStatus = 'pending' | 'done' | 'error'
@@ -209,9 +209,6 @@ export interface RpcMethodMap {
   'notion.signInStart': { params: void; result: { ok: boolean } }
   'notion.signInPoll': { params: void; result: DocsSignInPollResult }
   'notion.signInCancel': { params: void; result: { ok: boolean } }
-  'craft.signInStart': { params: void; result: { ok: boolean } }
-  'craft.signInPoll': { params: void; result: DocsSignInPollResult }
-  'craft.signInCancel': { params: void; result: { ok: boolean } }
 }
 
 export type RpcMethod = keyof RpcMethodMap

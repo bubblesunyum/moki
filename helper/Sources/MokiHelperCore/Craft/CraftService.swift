@@ -17,7 +17,6 @@ public struct CraftService: Sendable {
     private let store: CraftCredentialStore
     private let session: URLSession
     private let secrets: any SecretStoring
-    private let signIn: CraftSignInService?
     private let fixtures: Bool
     private let now: @Sendable () -> Date
 
@@ -26,13 +25,11 @@ public struct CraftService: Sendable {
         session: URLSession = .shared,
         fixtures: Bool = ProcessInfo.processInfo.environment["MOKI_FIXTURES"] == "1",
         now: @escaping @Sendable () -> Date = Date.init,
-        secrets: any SecretStoring = KeychainSecretStore(),
-        signIn: CraftSignInService? = nil
+        secrets: any SecretStoring = KeychainSecretStore()
     ) {
         self.store = store
         self.session = session
         self.secrets = secrets
-        self.signIn = signIn
         self.fixtures = fixtures
         self.now = now
     }
@@ -43,6 +40,7 @@ public struct CraftService: Sendable {
     /// `{ok:true, spaceName}`, and every verification failure throws —
     /// `unreachable` (dead network, wrong token, bad payload) or
     /// `rate_limited` — never an `ok:false` that reads as "bad paste".
+    /// Check-only: never changes fixture auth state.
     public func validate(url raw: String) async throws -> CraftConnectValidateResult {
         guard let baseURL = CraftClient.baseURL(from: raw) else {
             return CraftConnectValidateResult(ok: false)
@@ -63,6 +61,10 @@ public struct CraftService: Sendable {
     /// Validate with `GET /connection`, then store `{url, spaceId}`. A
     /// failed check stores nothing — whatever was there stays. Returns
     /// `{ok:true}`; throws like `validate` on failure.
+    /// Under fixtures, flip the in-memory signed-out flag back to
+    /// signed-in instead — nothing is written to disk, so a URL saved in
+    /// a fixtures session restores rows and is forgotten with the
+    /// process.
     public func save(url raw: String) async throws -> CraftOK {
         guard let baseURL = CraftClient.baseURL(from: raw) else {
             throw InvalidParamsError("Not a Craft connection URL.")
@@ -70,6 +72,7 @@ public struct CraftService: Sendable {
         if fixtures {
             // Hermetic: shape-checked above, never written to disk — a URL
             // saved in a fixtures session is forgotten with the process.
+            await CraftFixtureAuthState.shared.setSignedOut(false)
             return CraftOK()
         }
         switch await CraftClient(baseURL: baseURL, session: session).checkConnection() {
@@ -81,34 +84,39 @@ public struct CraftService: Sendable {
         }
     }
 
-    /// Sign out: revoke the OAuth grant best-effort, wipe the OAuth client
-    /// + token material and the legacy credential file. Missing state still
-    /// succeeds. The legacy `craftConnect.signOut` name stays for renderer
-    /// compatibility; it now clears both credential kinds.
+    /// Sign out: wipe the MCP-era OAuth keychain accounts (a no-op when
+    /// nothing was ever granted) and the legacy credential file. Missing
+    /// state still succeeds. The legacy `craftConnect.signOut` name stays
+    /// for renderer compatibility; it now clears both credential kinds.
+    /// Under fixtures, flip the in-memory flag instead — the real
+    /// credential file and Keychain entries are never touched, so a
+    /// fixtures sign-out cannot delete the developer's real credentials.
     public func signOut() async throws -> CraftOK {
-        if !fixtures {
-            if let material = craftLoadTokenMaterial(secrets: secrets) {
-                let clientID = craftLoadClientMaterial(secrets: secrets)?.clientID ?? ""
-                await craftRevokeToken(material: material, clientID: clientID, session: session)
-            }
-            craftClearOAuthMaterial(secrets: secrets)
-            store.remove()
+        if fixtures {
+            await CraftFixtureAuthState.shared.setSignedOut(true)
+            return CraftOK()
         }
+        craftClearOAuthMaterial(secrets: secrets)
+        store.remove()
         return CraftOK()
     }
 
     /// Serve the Craft section. Never throws: no credential empties the
     /// section into its sign-in state (`signedOut`); every failure lands in
-    /// `unreachable` — a dead network never reads as empty-ok. OAuth MCP
-    /// listing wins when an OAuth grant is stored; the legacy Connect URL
-    /// remains as a fallback only.
+    /// `unreachable` — a dead network never reads as empty-ok. Listing is
+    /// the Connect URL only: one serial `GET /documents`, capped, never
+    /// sorted (the endpoint carries no recency, so section order is space
+    /// order).
+    /// Under fixtures, consult the in-memory fixture auth state: a
+    /// fixtures sign-out empties the section into its sign-in state
+    /// instead of snapping back to rows.
     public func listRecents() async -> DocsListRecentsResult {
         if fixtures {
+            if await CraftFixtureAuthState.shared.isSignedOut() {
+                return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
+            }
             return DocsListRecentsResult(
                 items: craftFixtureRecents(now: now()), unreachable: false, signedOut: false)
-        }
-        if let oauth = await oauthListRecents() {
-            return oauth
         }
         guard let credential = store.load(),
             let baseURL = CraftClient.baseURL(from: credential.url)
@@ -128,88 +136,24 @@ public struct CraftService: Sendable {
             return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
         }
     }
+}
 
-    /// OAuth MCP listing, or nil when no OAuth grant is stored (the caller
-    /// falls through to the legacy Connect URL). A dead grant
-    /// (`invalid_grant`, mid-session 401) signs out; anything else is a
-    /// partial.
-    private func oauthListRecents() async -> DocsListRecentsResult? {
-        guard let signIn else { return nil }
-        let token: String
-        do {
-            guard let fresh = try await signIn.freshAccessToken() else { return nil }
-            token = fresh
-        } catch let error as AppError where error.code == "auth_expired" {
-            return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
-        } catch {
-            return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
-        }
-        do {
-            return try await mcpListRecents(accessToken: token)
-        } catch let error as AppError where error.code == "auth_expired" {
-            // The cached token looked valid but the server rejected it:
-            // one forced refresh, one retry, then give up the grant.
-            do {
-                guard let rotated = try await signIn.forceRefreshAccessToken() else {
-                    return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
-                }
-                return try await mcpListRecents(accessToken: rotated)
-            } catch let retry as AppError where retry.code == "auth_expired" {
-                return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
-            } catch {
-                return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
-            }
-        } catch {
-            return DocsListRecentsResult(items: [], unreachable: true, signedOut: false)
-        }
-    }
+/// The MCP-era OAuth Keychain identity. The hosted-MCP OAuth stack is gone
+/// (listing is Connect-URL only), but sign-out still deletes the two items
+/// that flow wrote — one generic-password item each under Moki's own
+/// service — so a stale grant can never linger. Defined here (never in the
+/// shared SecretStore, which this area cannot edit).
+enum CraftOAuthKeychain {
+    static let service = MokiKeychainIDs.service
+    static let clientAccount = "craft-mcp-oauth-client"
+    static let tokenAccount = "craft-mcp-oauth-token"
+}
 
-    /// One MCP fetch: `tools/list` → the advertised documents tool → rows,
-    /// capped. Current servers advertise `craft_read` (`command:
-    /// documents list`); older ones advertise a JSON `documents_list`.
-    /// Throws `AppError` (transport errors pass through; a missing tool or
-    /// tool-level error reads as unreachable).
-    private func mcpListRecents(accessToken: String) async throws -> DocsListRecentsResult {
-        let client = RemoteMCPClient(
-            endpoint: craftMCPEndpoint, accessToken: accessToken, session: session)
-        let tools = try await client.listTools()
-        let spaceId =
-            tools.contains(where: { $0.name == "craft_read" }) ? await mcpSpaceID(client) : nil
-        let call: (name: String, arguments: JSONValue)
-        if let documents = tools.first(where: { $0.name == "documents_list" }) {
-            call = ("documents_list", craftDocumentsListArgs(schema: documents.inputSchema))
-        } else if let read = tools.first(where: { $0.name == "craft_read" }) {
-            call = ("craft_read", craftDocumentsReadArgs(schema: read.inputSchema))
-        } else {
-            throw AppError(
-                code: "unreachable",
-                message: "Craft returned an unexpected response. Please try again.")
-        }
-        let result = try await client.callTool(name: call.name, arguments: call.arguments)
-        guard !result.isError else {
-            throw AppError(
-                code: "unreachable",
-                message: "Craft could not list documents. Please try again.")
-        }
-        let items = craftMCPDocuments(from: result).prefix(craftOAuthRecentsPageSize).map {
-            craftMCPDocItem(from: $0, spaceId: spaceId)
-        }
-        return DocsListRecentsResult(items: Array(items), unreachable: false, signedOut: false)
-    }
-
-    /// The space id behind the web editor links, from `connection info` on
-    /// the advertised `craft_read`. Best-effort: any failure (including an
-    /// expired token, which the documents call then reports and retries)
-    /// reads as no space id, so the listing's outcome never depends on it.
-    private func mcpSpaceID(_ client: RemoteMCPClient) async -> String? {
-        guard
-            let result = try? await client.callTool(
-                name: "craft_read",
-                arguments: .object(["command": .string("connection info --format json")])),
-            !result.isError
-        else { return nil }
-        return craftSpaceID(from: result)
-    }
+/// Delete both MCP-era Keychain items. Best-effort: missing items still
+/// succeed — deleting what is not there is a no-op.
+func craftClearOAuthMaterial(secrets: any SecretStoring) {
+    try? secrets.delete(service: CraftOAuthKeychain.service, account: CraftOAuthKeychain.tokenAccount)
+    try? secrets.delete(service: CraftOAuthKeychain.service, account: CraftOAuthKeychain.clientAccount)
 }
 
 /// Map a client failure to the RPC error. Messages name the host only —
@@ -242,6 +186,20 @@ func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: Str
         id: document.id, title: document.title, source: .craft, updatedAt: fetchedAt,
         openUrl: craftWebEditorURL(spaceId: spaceId, documentId: document.id) ?? "",
         deepLink: craftDeepLink(spaceId: spaceId, blockId: document.id))
+}
+
+/// Craft's web editor for one document (Craft Link Formats):
+/// `https://docs.craft.do/editor/d/<spaceId>/<documentId>`. Nil without a
+/// space id. Both segments percent-encode to the unreserved set, so fixture
+/// ids such as `s/…` encode the same way as the renderer's `encodeURIComponent`.
+func craftWebEditorURL(spaceId: String?, documentId: String) -> String? {
+    guard let spaceId, !spaceId.isEmpty else { return nil }
+    let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+    guard let space = spaceId.addingPercentEncoding(withAllowedCharacters: unreserved),
+        let document = documentId.addingPercentEncoding(withAllowedCharacters: unreserved)
+    else { return nil }
+    return "https://docs.craft.do/editor/d/\(space)/\(document)"
 }
 
 /// Native-app open target for one document. Built with URLComponents so ids
@@ -288,41 +246,25 @@ public func craftConnectSignOutHandler(service: CraftService) -> @Sendable (JSON
 
 extension RPCServer {
     /// Register every Craft method. Called once from `moki-helper`'s `@main`
-    /// entry point; captures one service (plus one sign-in flow) for the
-    /// helper's lifetime. Tests build their own services with a temp-dir
-    /// store, an in-memory secret store, and a stubbed session.
+    /// entry point; captures one service for the helper's lifetime. Tests
+    /// build their own services with a temp-dir store, an in-memory secret
+    /// store, and a stubbed session.
     /// Returns the service it registered, so the Docs dispatcher can hold
-    /// the exact same instance (and therefore the same sign-in grant) as
-    /// `craftConnect.signOut` / `craft.signIn*`.
+    /// the exact same instance as `craftConnect.signOut`.
     @discardableResult
     public func registerCraftMethods(
         session: URLSession = .shared,
         locations: CraftLocations = .production(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        secrets: any SecretStoring = KeychainSecretStore(),
-        clock: @escaping @Sendable () -> Date = Date.init,
-        openBrowser: @escaping @Sendable (URL) -> Void = openOAuthInSystemBrowser,
-        makeServer: @escaping @Sendable () -> any OAuthLoopbackServing = { OAuthLoopbackServer() }
+        secrets: any SecretStoring = KeychainSecretStore()
     ) -> CraftService {
         let fixtures = environment["MOKI_FIXTURES"] == "1"
-        let signIn = CraftSignInService(
-            secrets: secrets, session: session, clock: clock,
-            openBrowser: openBrowser, makeServer: makeServer)
         let service = CraftService(
             store: CraftCredentialStore(locations: locations),
-            session: session, fixtures: fixtures, secrets: secrets, signIn: signIn)
+            session: session, fixtures: fixtures, secrets: secrets)
         register("craftConnect.validate", handler: craftConnectValidateHandler(service: service))
         register("craftConnect.save", handler: craftConnectSaveHandler(service: service))
         register("craftConnect.signOut", handler: craftConnectSignOutHandler(service: service))
-        if fixtures {
-            register("craft.signInStart", handler: craftSignInFixtureStartHandler())
-            register("craft.signInPoll", handler: craftSignInFixturePollHandler())
-            register("craft.signInCancel", handler: craftSignInFixtureCancelHandler())
-        } else {
-            register("craft.signInStart", handler: craftSignInStartHandler(service: signIn))
-            register("craft.signInPoll", handler: craftSignInPollHandler(service: signIn))
-            register("craft.signInCancel", handler: craftSignInCancelHandler(service: signIn))
-        }
         return service
     }
 }

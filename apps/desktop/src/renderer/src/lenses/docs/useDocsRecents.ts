@@ -4,11 +4,11 @@ import { getBridge } from '../../rpc/bridge'
 import { DOC_FIXTURES } from './fixtures'
 
 /* One source's recents: three parallel calls (Drive, Notion, Craft) each
- * keyed by source. Fixtures stand in until the helper lands its side — with
- * no bridge (tests, plain browser) they are the data; with a bridge, a live
- * result wins and a failure degrades to fixtures with the partial state so
- * the section never blanks. Signed-out empties the section into its
- * sign-in state instead of showing stale rows.
+ * keyed by source. Fixtures are the data only with no bridge (tests, plain
+ * browser); with a bridge, a live result wins and an RPC error empties the
+ * section into the partial state — never fixture rows posing as the user's
+ * docs. Signed-out empties the section into its sign-in state instead of
+ * showing stale rows.
  *
  * Status drives the per-section copy: loading skeletons, quiet ready rows,
  * one-line partial/unreachable notices, and the signed-out prompt. */
@@ -29,7 +29,9 @@ export function useDocsRecents(source: DocSource): DocsRecents {
   )
   if (!hasBridge) return { items: DOC_FIXTURES[source], status: 'ready' }
   if (query.isPending) return { items: [], status: 'loading' }
-  if (query.isError) return { items: DOC_FIXTURES[source], status: 'partial' }
+  /* With a bridge, an RPC error is empty rows plus the partial notice —
+   * fixture rows must never pose as the user's docs. */
+  if (query.isError) return { items: [], status: 'partial' }
   const data = query.data
   if (data.signedOut) {
     /* Signed out but a saved list came back with the payload: keep the rows

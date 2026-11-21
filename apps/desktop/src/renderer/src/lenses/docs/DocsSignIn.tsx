@@ -6,8 +6,8 @@ import { QuietButton, Text } from '../../ui'
 
 /* Poll cadence for Docs OAuth sign-ins: start returns at once (the RPC
  * timeout is 15s, so a consent wait can never be one long-poll) and the
- * renderer polls until done/error/cancel/unmount. Shared by the Google,
- * Notion and Craft flows — the three differ only in method names. */
+ * renderer polls until done/error/cancel/unmount. Shared by the Google and
+ * Notion flows — the two differ only in method names. */
 export const DOCS_SIGN_IN_POLL_MS = 2000
 
 /* One provider's exact start/poll/cancel RPC names. A union keeps the
@@ -25,12 +25,6 @@ export type DocsSignInMethods =
       poll: 'notion.signInPoll'
       cancel: 'notion.signInCancel'
     }
-  | {
-      provider: 'Craft'
-      start: 'craft.signInStart'
-      poll: 'craft.signInPoll'
-      cancel: 'craft.signInCancel'
-    }
 
 export const GOOGLE_SIGN_IN_METHODS: DocsSignInMethods = {
   provider: 'Google',
@@ -44,13 +38,6 @@ export const NOTION_SIGN_IN_METHODS: DocsSignInMethods = {
   start: 'notion.signInStart',
   poll: 'notion.signInPoll',
   cancel: 'notion.signInCancel'
-}
-
-export const CRAFT_SIGN_IN_METHODS: DocsSignInMethods = {
-  provider: 'Craft',
-  start: 'craft.signInStart',
-  poll: 'craft.signInPoll',
-  cancel: 'craft.signInCancel'
 }
 
 /* Docs OAuth sign-in flow state: the token itself never crosses into the

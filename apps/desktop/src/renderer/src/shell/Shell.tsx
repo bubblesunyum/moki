@@ -3,6 +3,7 @@ import { PrimitivesPage } from '../dev/Primitives'
 import { Inspector } from './Inspector'
 import { Sidebar } from './Sidebar'
 import { useShell } from './ShellProvider'
+import { useCaptureScrollTo } from './useCaptureScrollTo'
 import './Shell.css'
 
 /* Webview portal target: the shell content column. The Day lens ports its
@@ -14,6 +15,7 @@ export function Shell(): React.JSX.Element {
   const lens = lensById(activeLens)
   const showDevPage = import.meta.env.DEV && showPrimitives
   const Active = lens.Component
+  useCaptureScrollTo()
 
   return (
     <div className="moki-shell">

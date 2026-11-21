@@ -709,6 +709,39 @@ struct DocsRecentsTests {
         await NotionFixtureAuthState.shared.reset()
     }
 
+    @Test func fixtureCraftHandlerHonorsFixtureSignOut() async throws {
+        await CraftFixtureAuthState.shared.reset()
+        let handler = fixtureDocsListRecentsHandler()
+        let craftParams = JSONValue.object(["source": .string(DocSource.craft.rawValue)])
+        // Signed in by default: 12 rows, flags clear.
+        let before = try await handler(craftParams)
+        #expect(before.items.count == 12)
+        #expect(before.signedOut == false)
+
+        // Sign out through the fixture CraftService — the same path the
+        // renderer calls — and the section settles into sign-in state.
+        let (home, scratch) = try makeDocsTempHome()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let craft = CraftService(
+            store: CraftCredentialStore(
+                locations: CraftLocations(
+                    credentialURL: home.appendingPathComponent("craft-connection.json"))),
+            session: makeDocsStubSession(), fixtures: true,
+            secrets: InMemorySecretStore())
+        _ = try await craft.signOut()
+        let signedOut = try await handler(craftParams)
+        #expect(signedOut.items.isEmpty)
+        #expect(signedOut.unreachable == false)
+        #expect(signedOut.signedOut == true)
+
+        // A pasted URL restores rows with no renderer change.
+        _ = try await craft.save(url: "https://connect.craft.do/links/fixture/api/v1")
+        let restored = try await handler(craftParams)
+        #expect(restored.items.count == 12)
+        #expect(restored.signedOut == false)
+        await CraftFixtureAuthState.shared.reset()
+    }
+
     // MARK: - Mapping unit
     @Test func notionDocItemMapping() {
         let withURL = notionDocItem(

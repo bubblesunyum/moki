@@ -226,16 +226,11 @@ describe('protocol', () => {
     const notionPoll: RpcMethodMap['notion.signInPoll']['result'] = done
     const notionStart: RpcMethodMap['notion.signInStart']['result'] = { ok: true }
     const notionCancel: RpcMethodMap['notion.signInCancel']['result'] = { ok: true }
-    const craftPoll: RpcMethodMap['craft.signInPoll']['result'] = failed
-    const craftStart: RpcMethodMap['craft.signInStart']['result'] = { ok: true }
-    const craftCancel: RpcMethodMap['craft.signInCancel']['result'] = { ok: true }
     expect(notionPoll.status).toBe('done')
     expect(pending.status).toBe('pending')
-    expect(craftPoll.message).toBe('declined')
+    expect(failed.message).toBe('declined')
     expect(notionStart.ok).toBe(true)
     expect(notionCancel.ok).toBe(true)
-    expect(craftStart.ok).toBe(true)
-    expect(craftCancel.ok).toBe(true)
   })
 
   it('carries rate_limited through the shared error shape', () => {

@@ -24,7 +24,7 @@ function queryParam(name: string): string | undefined {
  * and loads the Craft home page in the preview pane for browsing.
  * Presentation, not contract data — it lives here, not in fixtures.ts,
  * and never appears in any section's items (resolved by id outside
- * `all`). Signed-out Craft instead shows the OAuth sign-in control; live
+ * `all`). Signed-out Craft instead shows the paste-once Connect form; live
  * Craft rows preview like Notion, and only a row with no web URL opens
  * natively via its deepLink. */
 const CRAFT_HOME_DOC: DocItem = {
@@ -182,10 +182,11 @@ function DocSection({
   selectedId: string | null
   onSelect: (doc: DocItem) => void
 }): React.JSX.Element {
-  /* Notion and Craft carry their own auth affordances: the shared
-   * browser-approval control in the signed-out state, a sign-out button
-   * beside the title once signed in. Both need the bridge; fixture mode
-   * (plain browser, captures) stays clean without them. */
+  /* Notion and Craft carry their own auth affordances: Notion's
+   * browser-approval control (Craft's paste-once Connect form) in the
+   * signed-out state, a sign-out button beside the title once signed in.
+   * Both need the bridge; fixture mode (plain browser, captures) stays
+   * clean without them. */
   const hasBridge = getBridge() !== null
   const showSignOut =
     (source === 'notion' || source === 'craft') &&
@@ -231,7 +232,7 @@ function DocSection({
   }
   const notice =
     query.status === 'partial'
-      ? "Couldn't refresh — showing saved list"
+      ? "Couldn't refresh"
       : query.status === 'unreachable'
         ? `${DOC_SOURCE_LABEL[source]} is unreachable`
         : null
@@ -265,8 +266,8 @@ function DocSection({
  * preview pane, mirroring the Messages 2-up. One selection across the
  * previewable rows (openUrl non-empty) replaces the right pane per click;
  * a row with no web URL opens in the native app via openExternal and never
- * touches the selection. Fixtures carry the UX until the helper lands live
- * listing (mok-8uu.3/4/6). */
+ * touches the selection. Fixtures carry the UX only with no bridge (tests,
+ * plain browser, captures); live listing owns every bridge session. */
 export function DocsLens(): React.JSX.Element {
   const drive = useDocsRecents('drive')
   const notion = useDocsRecents('notion')

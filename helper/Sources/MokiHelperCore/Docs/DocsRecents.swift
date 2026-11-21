@@ -10,8 +10,8 @@ import Foundation
 // This dispatcher unifies them: Drive reuses `DriveService.listFiles`,
 // Notion reuses `NotionService.listRecents` (hosted MCP first, legacy
 // integration token as fallback), and Craft reuses
-// `CraftService.listRecents` (hosted MCP first, legacy Connect URL as
-// fallback) when a service is wired in.
+// `CraftService.listRecents` (Connect URL listing) when a service is
+// wired in.
 //
 // Tokens never leave the helper: OAuth grants and any legacy credentials
 // stay in the Keychain behind their services, and only rows + status cross
@@ -167,6 +167,14 @@ public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throw
                 items: notionFixtureRecents().map(notionDocItem(from:)),
                 unreachable: false, signedOut: false)
         case .craft:
+            // Fixture Craft auth is hermetic in-memory state (see
+            // CraftFixtureAuthState, flipped by the fixture branches of
+            // craftConnect.save/signOut): a fixtures sign-out empties this
+            // section into its sign-in state instead of snapping back to
+            // rows.
+            if await CraftFixtureAuthState.shared.isSignedOut() {
+                return DocsListRecentsResult(items: [], unreachable: false, signedOut: true)
+            }
             return DocsListRecentsResult(
                 items: DocsFixtures.craftRecents(), unreachable: false, signedOut: false)
         }

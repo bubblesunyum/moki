@@ -235,214 +235,153 @@ describe('Docs Google sign-in flow', () => {
   )
 })
 
-describe('Docs Craft sign-in flow', () => {
+describe('Docs Craft Connect form', () => {
   function liveCraftRows(): DocItem[] {
     return [0, 1].map((index) => ({
       id: `craft-live-${index}`,
       title: `Craft live ${index}`,
       source: 'craft' as const,
       updatedAt: new Date(Date.now() - index * 60_000).toISOString(),
-      openUrl: '',
+      openUrl: `https://docs.craft.do/editor/d/live-space/craft-live-${index}`,
       deepLink: `craftdocs://open?blockId=live-${index}`
     }))
   }
 
-  it(
-    'start→pending→done refetches live rows',
-    async () => {
-      let craftOpen = false
-      const calls: string[] = []
-      let polls = 0
-      setBridge((method, params) => {
-        calls.push(method)
-        if (method === 'craft.signInStart') return Promise.resolve({ ok: true })
-        if (method === 'craft.signInPoll') {
-          polls += 1
-          /* First poll still waiting; second completes and flips the
-           * credential so the refetch lists rows. */
-          if (polls === 1) return Promise.resolve({ status: 'pending' })
-          craftOpen = true
-          return Promise.resolve({ status: 'done' })
-        }
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft' && !craftOpen) {
-          return Promise.resolve({ items: [], unreachable: false, signedOut: true })
-        }
-        if (source === 'craft') {
-          return Promise.resolve({ items: liveCraftRows(), unreachable: false, signedOut: false })
-        }
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
-      })
-      renderLens()
-      await waitFor(() => {
-        expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-      })
-      // One quiet line about the space approval, no connection-URL form.
-      expect(screen.getByText(/Choose a space in Craft/)).toBeDefined()
-      expect(screen.queryByLabelText('Craft connection URL')).toBeNull()
-      const before = calls.filter((method) => method === 'docs.listRecents').length
-      expect(before).toBeGreaterThan(0)
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      await waitFor(() => {
-        expect(screen.getByText('Waiting for browser…')).toBeDefined()
-      })
-      expect(within(craftSection()).getByRole('button', { name: 'Cancel' })).toBeDefined()
-      await waitFor(
-        () => {
-          expect(screen.getByTestId('docs-row-craft-live-0')).toBeDefined()
-        },
-        { timeout: 10_000 }
-      )
-      expect(calls.filter((method) => method === 'docs.listRecents').length).toBeGreaterThan(before)
-      // No token material reaches the DOM.
-      expect(document.body.textContent).not.toMatch(/refresh_token|access_token|connect\.craft\.do/i)
-    },
-    20_000
-  )
+  function signedOutCraftBridge(extra?: {
+    onValidate?: (url: string) => Promise<unknown>
+    onSave?: () => Promise<unknown>
+  }): { calls: Array<{ method: string; params: Params }> } {
+    const calls: Array<{ method: string; params: Params }> = []
+    setBridge((method, params) => {
+      calls.push({ method, params })
+      if (method === 'craftConnect.validate') {
+        return (
+          extra?.onValidate?.((params as { url: string }).url) ??
+          Promise.resolve({ ok: true, spaceName: 'Tansy space' })
+        )
+      }
+      if (method === 'craftConnect.save') return extra?.onSave?.() ?? Promise.resolve({ ok: true })
+      const source = (params as { source: DocSource }).source
+      if (source === 'craft') {
+        return Promise.resolve({ items: [], unreachable: false, signedOut: true })
+      }
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
+    return { calls }
+  }
 
-  it(
-    'cancel stops polling',
-    async () => {
-      const calls: string[] = []
-      setBridge((method, params) => {
-        calls.push(method)
-        if (method === 'craft.signInStart') return Promise.resolve({ ok: true })
-        if (method === 'craft.signInPoll') return Promise.resolve({ status: 'pending' })
-        if (method === 'craft.signInCancel') return Promise.resolve({ ok: true })
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft') return Promise.resolve({ items: [], unreachable: false, signedOut: true })
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
-      })
-      renderLens()
-      await waitFor(() => {
-        expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-      })
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      await waitFor(() => {
-        expect(screen.getByText('Waiting for browser…')).toBeDefined()
-      })
-      await waitFor(
-        () => {
-          expect(calls.filter((method) => method === 'craft.signInPoll').length).toBeGreaterThanOrEqual(1)
-        },
-        { timeout: 10_000 }
-      )
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Cancel' }))
-      await waitFor(() => {
-        expect(
-          within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })
-        ).toBeDefined()
-      })
-      expect(calls).toContain('craft.signInCancel')
-      const pollsAtCancel = calls.filter((method) => method === 'craft.signInPoll').length
-      await new Promise((resolve) => setTimeout(resolve, 2500))
-      expect(calls.filter((method) => method === 'craft.signInPoll')).toHaveLength(pollsAtCancel)
-    },
-    20_000
-  )
+  it('signed-out shows the paste form with its one-line note', async () => {
+    signedOutCraftBridge()
+    renderLens()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Craft needs sign-in')).toBeDefined()
+    })
+    expect(screen.getByText('Connect Craft to list docs')).toBeDefined()
+    // The paste-once form, not an OAuth button and not the preview home.
+    expect(within(craftSection()).getByLabelText('Craft connection URL')).toBeDefined()
+    expect(within(craftSection()).getByRole('button', { name: 'Validate' })).toBeDefined()
+    expect(screen.getByText('Craft → Settings → API → Create connection')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Sign in with Craft' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open Craft' })).toBeNull()
+    expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()
+  })
 
-  it(
-    'unmount mid-flow cancels the helper flow',
-    async () => {
-      const calls: string[] = []
-      setBridge((method, params) => {
-        calls.push(method)
-        if (method === 'craft.signInStart') return Promise.resolve({ ok: true })
-        if (method === 'craft.signInPoll') return Promise.resolve({ status: 'pending' })
-        if (method === 'craft.signInCancel') return Promise.resolve({ ok: true })
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft') return Promise.resolve({ items: [], unreachable: false, signedOut: true })
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
-      })
-      const { unmount } = render(
-        <RpcProvider>
-          <DocsLens />
-        </RpcProvider>
-      )
-      await waitFor(() => {
-        expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-      })
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      await waitFor(() => {
-        expect(screen.getByText('Waiting for browser…')).toBeDefined()
-      })
-      unmount()
-      await waitFor(() => {
-        expect(calls).toContain('craft.signInCancel')
-      })
-    },
-    20_000
-  )
+  it('validate shows the space name', async () => {
+    const { calls } = signedOutCraftBridge()
+    renderLens()
+    await waitFor(() => {
+      expect(within(craftSection()).getByLabelText('Craft connection URL')).toBeDefined()
+    })
+    const secret = 'https://connect.craft.do/v1/SECRET-abc-123'
+    fireEvent.change(within(craftSection()).getByLabelText('Craft connection URL'), {
+      target: { value: secret }
+    })
+    fireEvent.click(within(craftSection()).getByRole('button', { name: 'Validate' }))
+    await waitFor(() => {
+      expect(screen.getByText('Tansy space')).toBeDefined()
+    })
+    expect(within(craftSection()).getByRole('button', { name: 'Save' })).toBeDefined()
+    expect(calls.some((call) => call.method === 'craftConnect.validate')).toBe(true)
+    // The credential is never rendered back: the pasted value lives only
+    // in the input field itself, not in any text node.
+    expect(document.body.textContent).not.toContain('SECRET-abc-123')
+  })
 
-  it(
-    'double-click starts only one flow',
-    async () => {
-      const calls: string[] = []
-      let releaseStart!: () => void
-      const started = new Promise<void>((resolve) => {
-        releaseStart = resolve
-      })
-      setBridge((method, params) => {
-        calls.push(method)
-        if (method === 'craft.signInStart') return started.then(() => ({ ok: true }))
-        if (method === 'craft.signInPoll') return Promise.resolve({ status: 'pending' })
-        if (method === 'craft.signInCancel') return Promise.resolve({ ok: true })
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft') return Promise.resolve({ items: [], unreachable: false, signedOut: true })
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
-      })
-      renderLens()
-      await waitFor(() => {
-        expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-      })
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      // signInStart still pending: the second click must not bind a second flow.
-      expect(calls.filter((called) => called === 'craft.signInStart')).toHaveLength(1)
-      releaseStart()
-      await waitFor(() => {
-        expect(screen.getByText('Waiting for browser…')).toBeDefined()
-      })
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Cancel' }))
-      await waitFor(() => {
-        expect(
-          within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })
-        ).toBeDefined()
-      })
-    },
-    20_000
-  )
+  it('an invalid URL shows the one-line error', async () => {
+    signedOutCraftBridge({
+      onValidate: () => Promise.resolve({ ok: false })
+    })
+    renderLens()
+    await waitFor(() => {
+      expect(within(craftSection()).getByLabelText('Craft connection URL')).toBeDefined()
+    })
+    fireEvent.change(within(craftSection()).getByLabelText('Craft connection URL'), {
+      target: { value: 'not-a-url' }
+    })
+    fireEvent.click(within(craftSection()).getByRole('button', { name: 'Validate' }))
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't validate that URL")).toBeDefined()
+    })
+    // Back at idle: no space name, Validate available again.
+    expect(screen.queryByText('Tansy space')).toBeNull()
+    expect(within(craftSection()).getByRole('button', { name: 'Validate' })).toBeDefined()
+    // A fresh edit clears the stale error — it must never assert
+    // anything about a value that has not been checked.
+    fireEvent.change(within(craftSection()).getByLabelText('Craft connection URL'), {
+      target: { value: 'https://connect.craft.do/v1/maybe-good' }
+    })
+    expect(screen.queryByText("Couldn't validate that URL")).toBeNull()
+  })
 
-  it(
-    'error shows its message one-liner',
-    async () => {
-      setBridge((method, params) => {
-        if (method === 'craft.signInStart') return Promise.resolve({ ok: true })
-        if (method === 'craft.signInPoll') {
-          return Promise.resolve({ status: 'error', message: 'Consent timed out' })
-        }
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft') return Promise.resolve({ items: [], unreachable: false, signedOut: true })
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
-      })
-      renderLens()
-      await waitFor(() => {
-        expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-      })
-      fireEvent.click(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' }))
-      await waitFor(
-        () => {
-          expect(screen.getByText('Consent timed out')).toBeDefined()
-        },
-        { timeout: 10_000 }
-      )
-      // Back at idle with the button available again.
-      expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-    },
-    20_000
-  )
+  it('save stores, refetches live rows and clears the field', async () => {
+    let craftOpen = false
+    const calls: Array<{ method: string; params: Params }> = []
+    // After save the section lists live rows.
+    setBridge((method, params) => {
+      calls.push({ method, params })
+      if (method === 'craftConnect.validate') {
+        return Promise.resolve({ ok: true, spaceName: 'Tansy space' })
+      }
+      if (method === 'craftConnect.save') {
+        craftOpen = true
+        return Promise.resolve({ ok: true })
+      }
+      const source = (params as { source: DocSource }).source
+      if (source === 'craft' && !craftOpen) {
+        return Promise.resolve({ items: [], unreachable: false, signedOut: true })
+      }
+      if (source === 'craft') {
+        return Promise.resolve({ items: liveCraftRows(), unreachable: false, signedOut: false })
+      }
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
+    renderLens()
+    await waitFor(() => {
+      expect(within(craftSection()).getByLabelText('Craft connection URL')).toBeDefined()
+    })
+    const before = calls.filter((call) => call.method === 'docs.listRecents').length
+    expect(before).toBeGreaterThan(0)
+    const field = within(craftSection()).getByLabelText('Craft connection URL') as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'https://connect.craft.do/v1/SECRET-xyz-789' } })
+    fireEvent.click(within(craftSection()).getByRole('button', { name: 'Validate' }))
+    await waitFor(() => {
+      expect(within(craftSection()).getByRole('button', { name: 'Save' })).toBeDefined()
+    })
+    fireEvent.click(within(craftSection()).getByRole('button', { name: 'Save' }))
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('docs-row-craft-live-0')).toBeDefined()
+      },
+      { timeout: 10_000 }
+    )
+    expect(calls.filter((call) => call.method === 'docs.listRecents').length).toBeGreaterThan(before)
+    // The field clears after save; the credential appears nowhere in text.
+    expect(field.value).toBe('')
+    expect(document.body.textContent).not.toContain('SECRET-xyz-789')
+    expect(document.body.textContent).not.toMatch(/refresh_token|access_token/i)
+  })
 
-  it('craft sign-out flips to signed-out', async () => {
+  it('craft sign-out flips back to the paste form', async () => {
     let craftOpen = true
     setBridge((method, params) => {
       if (method === 'craftConnect.signOut') {
@@ -465,22 +404,29 @@ describe('Docs Craft sign-in flow', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Craft needs sign-in')).toBeDefined()
     })
-    // The OAuth control is back, not the old connection-URL form.
-    expect(within(craftSection()).getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
-    expect(screen.getByText(/Choose a space in Craft/)).toBeDefined()
+    // The Connect form is back, not an OAuth control.
+    expect(within(craftSection()).getByLabelText('Craft connection URL')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Sign in with Craft' })).toBeNull()
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()
   })
 
   it('rows with no web URL open externally without touching the selection', async () => {
-    const { openExternal } = setBridge(
-      (_method, params) => {
-        const source = (params as { source: DocSource }).source
-        if (source === 'craft') {
-          return Promise.resolve({ items: liveCraftRows(), unreachable: false, signedOut: false })
-        }
-        return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    // Legacy rows with no known space id carry no web URL: native-app open.
+    const nativeRows: DocItem[] = [0, 1].map((index) => ({
+      id: `craft-live-${index}`,
+      title: `Craft live ${index}`,
+      source: 'craft' as const,
+      updatedAt: new Date(Date.now() - index * 60_000).toISOString(),
+      openUrl: '',
+      deepLink: `craftdocs://open?blockId=live-${index}`
+    }))
+    const { openExternal } = setBridge((_method, params) => {
+      const source = (params as { source: DocSource }).source
+      if (source === 'craft') {
+        return Promise.resolve({ items: nativeRows, unreachable: false, signedOut: false })
       }
-    )
+      return Promise.resolve({ items: DOC_FIXTURES[source], unreachable: false, signedOut: false })
+    })
     renderLens()
     await waitFor(() => {
       expect(screen.getByTestId('docs-row-craft-live-0')).toBeDefined()

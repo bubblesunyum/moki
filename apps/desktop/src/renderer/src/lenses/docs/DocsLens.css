@@ -76,6 +76,39 @@
   margin-top: var(--moki-space-8);
 }
 
+.moki-docs-token-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--moki-space-4);
+}
+
+.moki-docs-token-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--moki-space-4) var(--moki-space-8);
+  color: var(--moki-color-ink);
+  font-family: var(--moki-font);
+  font-size: 13px;
+  background: var(--moki-quiet-fill);
+  border: 1px solid var(--moki-divider-line);
+  border-radius: var(--moki-radius-control);
+  outline: none;
+}
+
+.moki-docs-token-input::placeholder {
+  color: var(--moki-color-faint);
+}
+
+.moki-docs-token-actions {
+  display: flex;
+  gap: var(--moki-space-4);
+}
+
+.moki-docs-token-error {
+  margin: 0;
+}
+
 .moki-docs-row {
   display: flex;
   flex-direction: column;
