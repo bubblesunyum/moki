@@ -15,14 +15,14 @@ import { originOf } from '../day/widgets/webviewShared'
  * stays mechanism-only; this list says which apps this pane trusts.
  * docs.google.com looks like "just Drive" but its editor links never
  * route a popstate — add an origin only after a live hop is confirmed
- * against it. Notion needs both domains: live rows carry the API's page
- * url verbatim (www.notion.com, live hop confirmed mok-ono), while
- * fixtures and the helper's fallback build www.notion.so.
- * Unparseable URLs resolve to their raw string, which never matches —
- * they stay cold. */
+ * against it. Notion needs both domains: live rows carry the hosted
+ * MCP's page urls verbatim (app.notion.com/p/<id>, live hop confirmed
+ * mok-ono), while fixtures and the helper's URL-less fallback build
+ * www.notion.so. Unparseable URLs resolve to their raw string, which
+ * never matches — they stay cold. */
 export const WARM_HOP_ORIGINS: ReadonlySet<string> = new Set([
+  'https://app.notion.com',
   'https://www.notion.so',
-  'https://www.notion.com',
   'https://docs.craft.do'
 ])
 

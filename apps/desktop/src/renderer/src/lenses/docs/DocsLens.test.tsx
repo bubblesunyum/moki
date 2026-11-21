@@ -382,7 +382,7 @@ describe('DocPreview', () => {
     expect(script).toContain(JSON.stringify(second.openUrl))
   })
 
-  it('a notion pick hops warm with src frozen', async () => {
+  it('a www.notion.so pick hops warm with src frozen', async () => {
     // Pins the warm-hop fixture domain: Notion's rows are the only other
     // same-origin pair that must stay warm.
     const first = DOC_FIXTURES.notion[0]
@@ -396,17 +396,18 @@ describe('DocPreview', () => {
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
   })
 
-  it('a notion.com pick hops warm with src frozen', async () => {
-    // Live rows carry the API's page url verbatim (www.notion.com, warm
-    // hop live-confirmed mok-ono) while fixtures and the helper fallback
-    // build www.notion.so. Both domains must stay warm.
+  it('an app.notion.com pick hops warm with src frozen', async () => {
+    // Live rows carry the hosted MCP's page urls verbatim —
+    // app.notion.com/p/<id> (warm hop live-confirmed mok-ono) — while
+    // fixtures and the helper's URL-less fallback build www.notion.so.
+    // Both domains must stay warm.
     const first: DocItem = {
       ...DOC_FIXTURES.notion[0],
-      openUrl: 'https://www.notion.com/Roadmap-9f2c1a'
+      openUrl: 'https://app.notion.com/p/3f827adfafd780a6bbedc1b76596fedc?pvs=204'
     }
     const second: DocItem = {
       ...DOC_FIXTURES.notion[1],
-      openUrl: 'https://www.notion.com/Weekly-7d4b2e'
+      openUrl: 'https://app.notion.com/p/aa727adfafd78237aa7781ab4a40ea0b?pvs=204'
     }
     const { rerender } = render(<DocPreview doc={first} />)
     const frame = screen.getByTestId('docs-preview-frame')
@@ -502,7 +503,10 @@ describe('DocPreview', () => {
     }
     expect(isWarmHopOrigin('https://docs.craft.do/editor/d/s/d')).toBe(true)
     expect(isWarmHopOrigin('https://www.notion.so/page')).toBe(true)
-    expect(isWarmHopOrigin('https://www.notion.com/page')).toBe(true)
+    expect(isWarmHopOrigin('https://app.notion.com/p/x?pvs=204')).toBe(true)
+    // www.notion.com has no observed row and no confirmed hop — it stays
+    // cold until a live hop is confirmed on it.
+    expect(isWarmHopOrigin('https://www.notion.com/page')).toBe(false)
   })
 
   it('clears the loading overlay on the in-page event for a same-app pick', () => {
