@@ -237,14 +237,20 @@ describe('Docs Google sign-in flow', () => {
 
 describe('Docs Craft Connect form', () => {
   function liveCraftRows(): DocItem[] {
-    // Craft rows carry no web URL: the native app opens via deepLink.
+    // Craft rows preview at the web editor built from the clickableLink
+    // values (editor ids, not row ids) with the native-app deepLink
+    // secondary — the modeled shape matches live rows.
+    const editorIds = [
+      '11111111-2222-4aaa-8bbb-cccccccccccc',
+      '22222222-3333-4bbb-8ccc-dddddddddddd'
+    ]
     return [0, 1].map((index) => ({
       id: `craft-live-${index}`,
       title: `Craft live ${index}`,
       source: 'craft' as const,
       updatedAt: new Date(Date.now() - index * 60_000).toISOString(),
-      openUrl: '',
-      deepLink: `craftdocs://open?blockId=live-${index}`
+      openUrl: `https://docs.craft.do/editor/d/live-space/${encodeURIComponent(editorIds[index])}`,
+      deepLink: `craftdocs://open?spaceId=live-space&documentId=${editorIds[index]}`
     }))
   }
 
@@ -412,7 +418,7 @@ describe('Docs Craft Connect form', () => {
   })
 
   it('rows with no web URL open externally without touching the selection', async () => {
-    // Craft rows carry no web URL: native-app open via deepLink.
+    // Legacy Craft rows with no validated clickableLink carry no web URL: native-app open via deepLink.
     const nativeRows: DocItem[] = [0, 1].map((index) => ({
       id: `craft-live-${index}`,
       title: `Craft live ${index}`,

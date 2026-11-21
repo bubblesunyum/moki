@@ -9,11 +9,14 @@ import Foundation
 // /documents?fetchMetadata=true` behind no fan-out, capped at 12 rows for
 // the section.
 //
-// Craft rows are native-open rows: the web editor cannot render
-// unauthenticated (an empty skeleton + 403 outside the app), so rows carry
-// an empty `openUrl` and open in the native app via `deepLink` — the API's
-// `clickableLink` when it validates as `craftdocs://`, else the hand-built
-// deep link. The preview pane never mounts them.
+// Craft rows preview in the pane like Notion: rows carry the web editor
+// URL built from the API's `clickableLink` values (`spaceId` + `documentId`
+// query params). A row with no validated link (absent, non-craftdocs, or
+// missing params — including legacy credentials that predate space-id
+// capture) carries an empty openUrl and opens in the native app via
+// `deepLink`: the API's `clickableLink` when it validates as `craftdocs://`,
+// else the hand-built deep link. A row with no web URL never mounts in the
+// preview pane.
 
 /// Section cap. `GET /documents?fetchMetadata=true` unfiltered returns
 /// everything (654 observed in the live space) — fetch on demand, sort by
@@ -208,10 +211,13 @@ func craftSortByModified(_ documents: [CraftDocument]) -> [CraftDocument] {
 /// One document as a shared Docs row. `updatedAt` is the API's
 /// `lastModifiedAt` when the stamp parses (the sort's own rule: anything
 /// unparseable reads as undated), else the fetch time — a row never shows
-/// a blank date line while a valid fallback exists. `openUrl` stays empty —
-/// craft rows open in the native app, never in the preview pane — and
-/// `deepLink` prefers the API's `clickableLink` (only when it validates as
-/// a `craftdocs://` URL) over the hand-built deep link.
+/// a blank date line while a valid fallback exists. `openUrl` is the web
+/// editor built from the API's `clickableLink` values (never from the row
+/// id: the link's `documentId` is a different id family than the row's API
+/// id for the same doc), else empty — a row with no web URL opens in the
+/// native app via `deepLink` (the legacy no-space fallback), never in the
+/// preview pane. `deepLink` prefers the API's `clickableLink` (only when
+/// it validates as a `craftdocs://` URL) over the hand-built deep link.
 func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: String) -> DocItem {
     let updatedAt =
         document.lastModifiedAt.flatMap {
@@ -220,18 +226,56 @@ func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: Str
     return DocItem(
         id: document.id, title: document.title, source: .craft,
         updatedAt: updatedAt,
-        openUrl: "",
+        openUrl: craftWebEditorURL(fromClickableLink: document.clickableLink) ?? "",
         deepLink: craftNativeDeepLink(for: document, spaceId: spaceId))
 }
 
 /// The API's `clickableLink` wins when it is a `craftdocs://` URL;
 /// anything else (https editor links, garbage) is rejected in favor of the
-/// hand-built deep link, so a non-native target never reaches a row.
+/// hand-built deep link, so the deepLink stays a native `craftdocs://` target.
 func craftNativeDeepLink(for document: CraftDocument, spaceId: String?) -> String {
     if let link = document.clickableLink, link.hasPrefix("craftdocs://") {
         return link
     }
     return craftDeepLink(spaceId: spaceId, blockId: document.id)
+}
+
+/// Craft's web editor for one document (Craft Link Formats):
+/// `https://docs.craft.do/editor/d/<spaceId>/<documentId>`. Both segments
+/// percent-encode to the unreserved set, so fixture ids such as `s/…`
+/// encode the same way as the renderer's `encodeURIComponent`.
+///
+/// Live evidence: the `clickableLink`'s `documentId` is NOT the row's API
+/// id — the two id families differ for the same doc (a row id of
+/// `7bd0a593-…` carries a link with `documentId=277fa729-…`), so the
+/// editor URL must come from the link's own values. Building it from
+/// `spaceId + document.id` hangs the editor on its loading skeleton.
+func craftWebEditorURL(fromClickableLink link: String?) -> String? {
+    guard let link, link.hasPrefix("craftdocs://"),
+        let components = URLComponents(string: link),
+        let query = components.queryItems,
+        let spaceId = query.first(where: { $0.name == "spaceId" })?.value,
+        !spaceId.isEmpty,
+        let documentId = query.first(where: { $0.name == "documentId" })?.value,
+        !documentId.isEmpty
+    else { return nil }
+    // URLComponents percent-decodes the query values; the low-level
+    // builder re-encodes them for the editor path.
+    return craftWebEditorURL(spaceId: spaceId, documentId: documentId)
+}
+
+/// Craft's web editor for one document (Craft Link Formats):
+/// `https://docs.craft.do/editor/d/<spaceId>/<documentId>`. Nil without a
+/// space id. Both segments percent-encode to the unreserved set, so fixture
+/// ids such as `s/…` encode the same way as the renderer's `encodeURIComponent`.
+func craftWebEditorURL(spaceId: String?, documentId: String) -> String? {
+    guard let spaceId, !spaceId.isEmpty else { return nil }
+    let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+    guard let space = spaceId.addingPercentEncoding(withAllowedCharacters: unreserved),
+        let document = documentId.addingPercentEncoding(withAllowedCharacters: unreserved)
+    else { return nil }
+    return "https://docs.craft.do/editor/d/\(space)/\(document)"
 }
 
 /// Native-app open target for one document. Built with URLComponents so ids

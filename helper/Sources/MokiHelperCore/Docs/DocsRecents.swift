@@ -185,39 +185,49 @@ public func fixtureDocsListRecentsHandler() -> @Sendable (JSONValue) async throw
 
 public enum DocsFixtures {
     /// 12 canned Craft rows: ids/titles mirror the renderer's
-    /// `DOC_FIXTURES` craft section. Contract-shaped rows — `openUrl` empty
-    /// (craft rows are native-open rows: the preview pane never mounts
-    /// them), `deepLink` the native-app target — so the lens shell shows
-    /// content while live listing needs a credential.
+    /// `DOC_FIXTURES` craft section. Contract-shaped rows — `openUrl` the
+    /// Craft web editor (previews in the guest like Notion), `deepLink` the
+    /// native-app target — so the lens shell shows content while live
+    /// listing needs a credential.
+    ///
+    /// Fixture rows model clickableLink-bearing live rows (the normal live
+    /// case): each row's `deepLink` is the API-shaped
+    /// `craftdocs://open?spaceId=fixture-space&documentId=<editorId>` and its
+    /// `openUrl` is the same low-level `craftWebEditorURL` builder the live
+    /// path uses. The editor ids deliberately differ from the row ids —
+    /// craft's two id families differ for the same doc live — and mix
+    /// uppercase-hex and lowercase-uuid forms like the live data. The
+    /// editor ids are unreserved-set only so Swift and JS `encodeURIComponent`
+    /// byte-agree.
     ///
     /// Canonical mirror: ids/titles match lenses/docs/fixtures.ts row-for-row
     /// (see its header for the cross-side contract). updatedAt is generated
     /// relative to now with the same minutes-ago offsets, so ?mokiDoc pins
     /// and "within last day" hold under MOKI_FIXTURES=1 at any wall-clock
-    /// time. The deepLink is a literal interpolation (not URLComponents):
-    /// fixture ids carry `/`, which is legal unencoded in a query string,
-    /// and both sides must byte-agree.
+    /// time. Ids, editor ids, and URL tables are pinned in the renderer
+    /// tests — change rows here AND there together. The editor-id column
+    /// mirrors the live clickableLink values (not the row ids).
     public static func craftRecents(now: Date = Date()) -> [DocItem] {
-        let seeds: [(id: String, title: String, minutesAgo: Double)] = [
-            ("s/launch-checklist-a1b2c3", "Launch checklist", 35),
-            ("s/essay-draft-d4e5f6", "Essay draft", 80),
-            ("s/trip-itinerary-g7h8i9", "Trip itinerary", 160),
-            ("s/reading-notes-j0k1l2", "Reading notes", 240),
-            ("s/garden-plan-m3n4o5", "Garden plan", 330),
-            ("s/talk-outline-p6q7r8", "Talk outline", 450),
-            ("s/budget-review-s9t0u1", "Budget review", 570),
-            ("s/book-club-v2w3x4", "Book club picks", 690),
-            ("s/workout-log-y5z6a7", "Workout log", 810),
-            ("s/gift-list-b8c9d0", "Gift list", 930),
-            ("s/home-inventory-e1f2g3", "Home inventory", 1050),
-            ("s/ideas-inbox-h4i5j6", "Ideas inbox", 1180),
+        let seeds: [(id: String, editorId: String, title: String, minutesAgo: Double)] = [
+            ("s/launch-checklist-a1b2c3", "A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6", "Launch checklist", 35),
+            ("s/essay-draft-d4e5f6", "4b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", "Essay draft", 80),
+            ("s/trip-itinerary-g7h8i9", "B3A4F5E6-D7C8-4A9B-8C0D-1E2F3A4B5C6D", "Trip itinerary", 160),
+            ("s/reading-notes-j0k1l2", "7d8e9f0a-1b2c-4d3e-9f0a-1b2c3d4e5f6a", "Reading notes", 240),
+            ("s/garden-plan-m3n4o5", "C9D8E7F6-A5B4-4C3D-8E9F-0A1B2C3D4E5F", "Garden plan", 330),
+            ("s/talk-outline-p6q7r8", "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d", "Talk outline", 450),
+            ("s/budget-review-s9t0u1", "D0E1F2A3-B4C5-4D6E-8F90-1A2B3C4D5E6F", "Budget review", 570),
+            ("s/book-club-v2w3x4", "5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c", "Book club picks", 690),
+            ("s/workout-log-y5z6a7", "E1F2A3B4-C5D6-4E7F-8A9B-0C1D2E3F4A5B", "Workout log", 810),
+            ("s/gift-list-b8c9d0", "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d", "Gift list", 930),
+            ("s/home-inventory-e1f2g3", "F2A3B4C5-D6E7-4F8A-9B0C-1D2E3F4A5B6C", "Home inventory", 1050),
+            ("s/ideas-inbox-h4i5j6", "3b4c5d6e-7f8a-4b9c-0d1e-2f3a4b5c6d7e", "Ideas inbox", 1180),
         ]
         return seeds.map {
             DocItem(
                 id: $0.id, title: $0.title, source: .craft,
                 updatedAt: iso8601String(now.addingTimeInterval(-$0.minutesAgo * 60)),
-                openUrl: "",
-                deepLink: "craftdocs://open?spaceId=fixture-space&blockId=\($0.id)")
+                openUrl: craftWebEditorURL(spaceId: "fixture-space", documentId: $0.editorId) ?? "",
+                deepLink: "craftdocs://open?spaceId=fixture-space&documentId=\($0.editorId)")
         }
     }
 }

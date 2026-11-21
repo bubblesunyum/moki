@@ -25,7 +25,9 @@ function queryParam(name: string): string | undefined {
  * Presentation, not contract data — it lives here, not in fixtures.ts,
  * and never appears in any section's items (resolved by id outside
  * `all`). Signed-out Craft instead shows the paste-once Connect form; live
- * Craft rows carry no web URL and open natively via their deepLink. */
+ * Craft rows preview in the pane like Notion, and only a row with no
+ * validated clickableLink (empty openUrl, including legacy no-space
+ * credentials) opens natively via its deepLink. */
 const CRAFT_HOME_DOC: DocItem = {
   id: 'craft-home',
   title: 'Craft',
@@ -259,8 +261,8 @@ function DocSection({
 /* Docs lens: three stacked sections (Drive, Notion, Craft) beside the
  * preview pane, mirroring the Messages 2-up. One selection across the
  * previewable rows (openUrl non-empty) replaces the right pane per click;
- * a row with no web URL opens in the native app via openExternal and never
- * touches the selection. Fixtures carry the UX only with no bridge (tests,
+ * a Craft row with no validated clickableLink (empty openUrl) opens in the
+ * native app via openExternal and never touches the selection. Fixtures carry the UX only with no bridge (tests,
  * plain browser, captures); live listing owns every bridge session. */
 export function DocsLens(): React.JSX.Element {
   const drive = useDocsRecents('drive')
@@ -278,9 +280,9 @@ export function DocsLens(): React.JSX.Element {
     return DOC_SOURCES.map((source) => ({ source, query: bySource[source] }))
   }, [drive, notion, craft])
   const all = useMemo(() => sections.flatMap(({ query }) => query.items), [sections])
-  /* Preview-eligible rows only: rows with an openUrl. Craft rows carry no
-   * web URL and open out-of-app, so they never auto-select or resolve as
-   * the preview doc. */
+  /* Preview-eligible rows only: rows with an openUrl. A Craft row with no
+   * validated clickableLink opens out-of-app and never auto-selects
+   * or resolves as the preview doc. */
   const previewable = useMemo(() => all.filter(isPreviewable), [all])
 
   /* A picked row that vanishes (signed-out, refetch) clears the selection —
@@ -304,8 +306,9 @@ export function DocsLens(): React.JSX.Element {
   }, [previewable, selectedId, preference, hasPicked])
 
   function handleSelect(doc: DocItem): void {
-    /* Rows with no web URL (Craft native-app open) never touch the selection —
-     * they open externally and the preview stays where it was. */
+    /* A Craft row with no validated clickableLink (empty openUrl,
+     * native-app open) never touches the selection —
+     * it opens externally and the preview stays where it was. */
     if (!isPreviewable(doc)) {
       if (doc.deepLink) {
         getBridge()?.openExternal(doc.deepLink).catch(() => undefined)

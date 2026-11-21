@@ -40,12 +40,11 @@ describe('docs fixtures', () => {
       expect(items).toHaveLength(12)
       for (const item of items) {
         expect(item.source).toBe(source)
+        expect(item.openUrl).toMatch(/^https:\/\//)
         if (source === 'craft') {
-          // Craft opens natively: no web URL, only a craftdocs deepLink.
-          expect(item.openUrl).toBe('')
+          // Craft previews at its web editor and keeps a native-app deepLink.
+          expect(item.openUrl).toMatch(/^https:\/\/docs\.craft\.do\/editor\/d\/fixture-space\//)
           expect(item.deepLink).toMatch(/^craftdocs:\/\/open\?/)
-        } else {
-          expect(item.openUrl).toMatch(/^https:\/\//)
         }
         expect(Number.isNaN(Date.parse(item.updatedAt))).toBe(false)
       }
@@ -61,8 +60,8 @@ describe('docs fixtures', () => {
 
   /* Cross-side contract: the id/title/URL lists below are checked in on
    * both sides (mirror: "fixtureRowsMirrorCanonicalContract" in
-   * DocsRecentsTests.swift) — Craft rows carry an empty openUrl plus a
-   * craftdocs deepLink, pinned just below. TS and Swift cannot share one fixture file, so
+   * DocsRecentsTests.swift) — Craft rows carry a docs.craft.do editor URL
+   * plus a craftdocs deepLink, pinned just below. TS and Swift cannot share one fixture file, so
    * a fixture change on either side without the other fails here or there.
    * Change rows in fixtures.ts AND the Swift mirrors together. */
   it('mirrors the canonical contract the helper fixtures pin', () => {
@@ -96,28 +95,43 @@ describe('docs fixtures', () => {
         ['Journal-7c1e6a', 'Journal', 'https://www.notion.so/Journal-7c1e6a']
       ],
       craft: [
-        ['s/launch-checklist-a1b2c3', 'Launch checklist', ''],
-        ['s/essay-draft-d4e5f6', 'Essay draft', ''],
-        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', ''],
-        ['s/reading-notes-j0k1l2', 'Reading notes', ''],
-        ['s/garden-plan-m3n4o5', 'Garden plan', ''],
-        ['s/talk-outline-p6q7r8', 'Talk outline', ''],
-        ['s/budget-review-s9t0u1', 'Budget review', ''],
-        ['s/book-club-v2w3x4', 'Book club picks', ''],
-        ['s/workout-log-y5z6a7', 'Workout log', ''],
-        ['s/gift-list-b8c9d0', 'Gift list', ''],
-        ['s/home-inventory-e1f2g3', 'Home inventory', ''],
-        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', '']
+        ['s/launch-checklist-a1b2c3', 'Launch checklist', 'https://docs.craft.do/editor/d/fixture-space/A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6'],
+        ['s/essay-draft-d4e5f6', 'Essay draft', 'https://docs.craft.do/editor/d/fixture-space/4b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e'],
+        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', 'https://docs.craft.do/editor/d/fixture-space/B3A4F5E6-D7C8-4A9B-8C0D-1E2F3A4B5C6D'],
+        ['s/reading-notes-j0k1l2', 'Reading notes', 'https://docs.craft.do/editor/d/fixture-space/7d8e9f0a-1b2c-4d3e-9f0a-1b2c3d4e5f6a'],
+        ['s/garden-plan-m3n4o5', 'Garden plan', 'https://docs.craft.do/editor/d/fixture-space/C9D8E7F6-A5B4-4C3D-8E9F-0A1B2C3D4E5F'],
+        ['s/talk-outline-p6q7r8', 'Talk outline', 'https://docs.craft.do/editor/d/fixture-space/2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d'],
+        ['s/budget-review-s9t0u1', 'Budget review', 'https://docs.craft.do/editor/d/fixture-space/D0E1F2A3-B4C5-4D6E-8F90-1A2B3C4D5E6F'],
+        ['s/book-club-v2w3x4', 'Book club picks', 'https://docs.craft.do/editor/d/fixture-space/5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c'],
+        ['s/workout-log-y5z6a7', 'Workout log', 'https://docs.craft.do/editor/d/fixture-space/E1F2A3B4-C5D6-4E7F-8A9B-0C1D2E3F4A5B'],
+        ['s/gift-list-b8c9d0', 'Gift list', 'https://docs.craft.do/editor/d/fixture-space/6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d'],
+        ['s/home-inventory-e1f2g3', 'Home inventory', 'https://docs.craft.do/editor/d/fixture-space/F2A3B4C5-D6E7-4F8A-9B0C-1D2E3F4A5B6C'],
+        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', 'https://docs.craft.do/editor/d/fixture-space/3b4c5d6e-7f8a-4b9c-0d1e-2f3a4b5c6d7e']
       ]
     }
     for (const source of ['drive', 'notion', 'craft'] as const) {
       const items = DOC_FIXTURES[source]
       expect(items.map((item) => [item.id, item.title, item.openUrl])).toEqual(canonical[source])
       if (source === 'craft') {
-        // Craft rows carry no web URL and open natively via a deepLink
+        // Craft previews at its web editor built from the clickableLink
+        // values (editor ids, not row ids) and keeps a native-app deepLink
         // mirroring the helper's DocsFixtures shape.
+        const craftEditorIds: Record<string, string> = {
+          's/launch-checklist-a1b2c3': 'A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6',
+          's/essay-draft-d4e5f6': '4b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
+          's/trip-itinerary-g7h8i9': 'B3A4F5E6-D7C8-4A9B-8C0D-1E2F3A4B5C6D',
+          's/reading-notes-j0k1l2': '7d8e9f0a-1b2c-4d3e-9f0a-1b2c3d4e5f6a',
+          's/garden-plan-m3n4o5': 'C9D8E7F6-A5B4-4C3D-8E9F-0A1B2C3D4E5F',
+          's/talk-outline-p6q7r8': '2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d',
+          's/budget-review-s9t0u1': 'D0E1F2A3-B4C5-4D6E-8F90-1A2B3C4D5E6F',
+          's/book-club-v2w3x4': '5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c',
+          's/workout-log-y5z6a7': 'E1F2A3B4-C5D6-4E7F-8A9B-0C1D2E3F4A5B',
+          's/gift-list-b8c9d0': '6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d',
+          's/home-inventory-e1f2g3': 'F2A3B4C5-D6E7-4F8A-9B0C-1D2E3F4A5B6C',
+          's/ideas-inbox-h4i5j6': '3b4c5d6e-7f8a-4b9c-0d1e-2f3a4b5c6d7e'
+        }
         expect(items.map((item) => item.deepLink)).toEqual(
-          items.map((item) => `craftdocs://open?spaceId=fixture-space&blockId=${item.id}`)
+          items.map((item) => `craftdocs://open?spaceId=fixture-space&documentId=${craftEditorIds[item.id]}`)
         )
       } else {
         for (const item of items) expect(item.deepLink).toBeUndefined()
@@ -152,32 +166,12 @@ describe('DocsLens', () => {
     expect(frame.getAttribute('src')).toBe(target.openUrl)
   })
 
-  it('clicking a Craft row opens natively without touching the preview', async () => {
-    // Craft rows carry no web URL (the web editor renders an empty shell
-    // unauthenticated), so the click routes to the native app and the pane
-    // keeps its previous selection.
-    const openExternal = vi.fn().mockResolvedValue(undefined)
-    setBridge(
-      (_method, params) =>
-        Promise.resolve({
-          items: DOC_FIXTURES[(params as { source: DocSource }).source],
-          unreachable: false,
-          signedOut: false
-        }),
-      { openExternal }
-    )
+  it('clicking a Craft row previews its web editor like a Notion row', () => {
     renderLens()
     const target = DOC_FIXTURES.craft[2]
-    await waitFor(() => {
-      expect(screen.getByTestId(`docs-row-${target.id}`)).toBeDefined()
-    })
-    const before = screen.getByTestId('docs-preview-frame').getAttribute('src')
-    expect(before).toBe(DOC_FIXTURES.drive[0].openUrl)
     fireEvent.click(screen.getByTestId(`docs-row-${target.id}`))
-    expect(openExternal).toHaveBeenCalledWith(target.deepLink)
-    // Selection untouched: the preview stays and no row lights up.
-    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(before)
-    expect(screen.getByTestId(`docs-row-${target.id}`).getAttribute('aria-current')).toBe('false')
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(target.openUrl)
+    expect(screen.getByTestId(`docs-row-${target.id}`).getAttribute('aria-current')).toBe('true')
   })
 
   it('a single selection replaces the pane', () => {

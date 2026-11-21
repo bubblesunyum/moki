@@ -22,10 +22,10 @@ public struct DocItem: Codable, Sendable, Equatable {
     public var source: DocSource
     /// ISO8601 modified time straight from the source API.
     public var updatedAt: String
-    /// URL opened in the shared Docs preview pane. Empty when the row has
-    /// no web URL and opens out-of-app via `deepLink` instead (every Craft
-    /// row: its web editor cannot render unauthenticated, so craft always
-    /// opens native).
+    /// URL opened in the shared Docs preview pane. For Craft this is the
+    /// web editor built from the API's clickableLink values; empty when a
+    /// row has no validated link (including legacy no-space credentials)
+    /// and opens out-of-app via `deepLink` instead.
     public var openUrl: String
     /// Optional out-of-app open target (Craft `craftdocs://` deep link).
     /// A row with no openUrl opens in the native app via openExternal and

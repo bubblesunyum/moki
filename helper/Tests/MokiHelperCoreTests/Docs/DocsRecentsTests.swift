@@ -490,10 +490,13 @@ struct DocsRecentsTests {
             drive: makeDocsDriveService(home: home), notion: makeDocsNotionService(), craft: craft)
 
         // Identity mapping: the service's contract rows pass through —
-        // native-open rows with empty openUrl and a craftdocs deep link.
+        // craft rows preview at the web editor with a craftdocs deep link.
         let result = await service.listRecents(source: .craft)
         #expect(result.items.count == 12)
-        #expect(result.items.allSatisfy { $0.source == .craft && $0.openUrl.isEmpty })
+        #expect(result.items.allSatisfy {
+            $0.source == .craft
+                && $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/fixture-space/")
+        })
         #expect(result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
@@ -608,6 +611,22 @@ struct DocsRecentsTests {
             ("s/home-inventory-e1f2g3", "Home inventory"),
             ("s/ideas-inbox-h4i5j6", "Ideas inbox"),
         ]
+        // Fixture editor ids mirror the live clickableLink values (not the
+        // row ids — craft's two id families differ for the same doc).
+        let craftEditorIds: [String: String] = [
+            "s/launch-checklist-a1b2c3": "A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6",
+            "s/essay-draft-d4e5f6": "4b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+            "s/trip-itinerary-g7h8i9": "B3A4F5E6-D7C8-4A9B-8C0D-1E2F3A4B5C6D",
+            "s/reading-notes-j0k1l2": "7d8e9f0a-1b2c-4d3e-9f0a-1b2c3d4e5f6a",
+            "s/garden-plan-m3n4o5": "C9D8E7F6-A5B4-4C3D-8E9F-0A1B2C3D4E5F",
+            "s/talk-outline-p6q7r8": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+            "s/budget-review-s9t0u1": "D0E1F2A3-B4C5-4D6E-8F90-1A2B3C4D5E6F",
+            "s/book-club-v2w3x4": "5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c",
+            "s/workout-log-y5z6a7": "E1F2A3B4-C5D6-4E7F-8A9B-0C1D2E3F4A5B",
+            "s/gift-list-b8c9d0": "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d",
+            "s/home-inventory-e1f2g3": "F2A3B4C5-D6E7-4F8A-9B0C-1D2E3F4A5B6C",
+            "s/ideas-inbox-h4i5j6": "3b4c5d6e-7f8a-4b9c-0d1e-2f3a4b5c6d7e",
+        ]
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime]
         await NotionFixtureAuthState.shared.reset()
@@ -632,12 +651,15 @@ struct DocsRecentsTests {
                         item.openUrl == "https://www.notion.so/\(item.id)",
                         "openUrl drift for \(item.id)")
                 case .craft:
-                    // Native-open rows: no web editor URL — the preview
-                    // pane never mounts them — only the deep link.
-                    #expect(item.openUrl == "", "openUrl drift for \(item.id)")
+                    let editorId = try #require(
+                        craftEditorIds[item.id], "missing editor id for \(item.id)")
+                    #expect(
+                        item.openUrl
+                            == "https://docs.craft.do/editor/d/fixture-space/\(editorId)",
+                        "openUrl drift for \(item.id)")
                     #expect(
                         item.deepLink
-                            == "craftdocs://open?spaceId=fixture-space&blockId=\(item.id)",
+                            == "craftdocs://open?spaceId=fixture-space&documentId=\(editorId)",
                         "deepLink drift for \(item.id)")
                 }
             }
@@ -662,19 +684,14 @@ struct DocsRecentsTests {
             let result = try await handler(.object(["source": .string(source.rawValue)]))
             #expect(result.items.count == 12, "expected 12 rows for \(source)")
             #expect(result.items.allSatisfy { $0.source == source }, "wrong source for \(source)")
+            #expect(
+                result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
+                "non-https openUrl for \(source)")
             if source == .craft {
-                // Craft rows are native-open: empty openUrl plus a
-                // craftdocs deep link, never an https editor URL.
-                #expect(
-                    result.items.allSatisfy { $0.openUrl.isEmpty },
-                    "craft rows must not carry a preview URL for \(source)")
+                // Every Craft row carries a native-app deepLink besides its web editor URL.
                 #expect(
                     result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") },
                     "non-craftdocs deepLink for \(source)")
-            } else {
-                #expect(
-                    result.items.allSatisfy { $0.openUrl.hasPrefix("https://") },
-                    "non-https openUrl for \(source)")
             }
             #expect(result.unreachable == false)
             #expect(result.signedOut == false)

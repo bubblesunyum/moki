@@ -109,10 +109,9 @@ export interface DocItem {
   source: DocSource
   /** ISO8601 last-modified string. */
   updatedAt: string
-  /** Absolute http(s) URL opened in the right-pane preview. Empty when the
-   * row has no web URL and opens out-of-app via `deepLink` instead (every
-   * Craft row: its web editor cannot render unauthenticated, so craft
-   * always opens native). */
+  /** Absolute http(s) URL opened in the right-pane preview. Empty when a
+   * Craft row has no validated clickableLink (including legacy no-space
+   * credentials) and opens out-of-app via `deepLink` instead. */
   openUrl: string
   /** Optional out-of-app open target (Craft `craftdocs://` deep link).
    * A row with no openUrl opens in the native app via openExternal and
@@ -316,7 +315,8 @@ export function isExternalHttpUrl(url: unknown): url is string {
   return typeof url === 'string' && /^https?:\/\/[^/\s]/i.test(url.trim())
 }
 
-/** True for Craft's native-app deep link (`craftdocs://open?spaceId=&blockId=`).
+/** True for Craft's native-app deep link (`craftdocs://open?spaceId=&blockId=`
+ * — the API's clickableLink form uses `documentId=` for the same scheme).
  * Preload and main both gate `openExternal` on this one definition, so the
  * two allowlists cannot drift. Nothing else broadens the scheme. */
 export function isCraftDeepLink(url: unknown): url is string {

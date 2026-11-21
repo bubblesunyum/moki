@@ -464,22 +464,24 @@ struct CraftTests {
     func listingMapsRows() async throws {
         // Space order is scrambled on purpose: d-old … d-new arrive
         // interleaved, with ties (d-tie1/d-tie2), undated rows (d-nodate1/2),
-        // and both metadata nestings. 14 rows so the cap bites.
+        // and both metadata nestings. 14 rows so the cap bites. Every stub
+        // doc carries a clickableLink (the normal live shape), so openUrls
+        // come from the links' own values.
         let items = [
-            #"{"id":"d-old","title":"Old","lastModifiedAt":"2026-11-10T10:00:00Z"}"#,
-            #"{"id":"d-tie1","title":"Tie 1","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z"}}"#,
-            #"{"id":"d-nodate1","title":"No date"}"#,
-            #"{"id":"d-new","title":"New","metadata":{"lastModifiedAt":"2026-11-20T10:00:00Z"}}"#,
-            #"{"id":"d-mid","title":"Mid","lastModifiedAt":"2026-11-15T10:00:00Z"}"#,
-            #"{"id":"d-tie2","title":"Tie 2","lastModifiedAt":"2026-11-19T10:00:00Z"}"#,
-            #"{"id":"d-nodate2","title":"No date 2","metadata":{}}"#,
-            #"{"id":"d-tie3","title":"Tie 3","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z"}}"#,
-            #"{"id":"d-08","title":"D8","lastModifiedAt":"2026-11-08T10:00:00Z"}"#,
-            #"{"id":"d-07","title":"D7","lastModifiedAt":"2026-11-07T10:00:00Z"}"#,
-            #"{"id":"d-06","title":"D6","lastModifiedAt":"2026-11-06T10:00:00Z"}"#,
-            #"{"id":"d-05","title":"D5","lastModifiedAt":"2026-11-05T10:00:00Z"}"#,
-            #"{"id":"d-04","title":"D4","lastModifiedAt":"2026-11-04T10:00:00Z"}"#,
-            #"{"id":"d-03","title":"D3","lastModifiedAt":"2026-11-03T10:00:00Z"}"#,
+            #"{"id":"d-old","title":"Old","lastModifiedAt":"2026-11-10T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-old"}"#,
+            #"{"id":"d-tie1","title":"Tie 1","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-tie1"}}"#,
+            #"{"id":"d-nodate1","title":"No date","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-nodate1"}"#,
+            #"{"id":"d-new","title":"New","metadata":{"lastModifiedAt":"2026-11-20T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-new"}}"#,
+            #"{"id":"d-mid","title":"Mid","lastModifiedAt":"2026-11-15T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-mid"}"#,
+            #"{"id":"d-tie2","title":"Tie 2","lastModifiedAt":"2026-11-19T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-tie2"}"#,
+            #"{"id":"d-nodate2","title":"No date 2","metadata":{"clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-nodate2"}}"#,
+            #"{"id":"d-tie3","title":"Tie 3","metadata":{"lastModifiedAt":"2026-11-19T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-tie3"}}"#,
+            #"{"id":"d-08","title":"D8","lastModifiedAt":"2026-11-08T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-08"}"#,
+            #"{"id":"d-07","title":"D7","lastModifiedAt":"2026-11-07T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-07"}"#,
+            #"{"id":"d-06","title":"D6","lastModifiedAt":"2026-11-06T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-06"}"#,
+            #"{"id":"d-05","title":"D5","lastModifiedAt":"2026-11-05T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-05"}"#,
+            #"{"id":"d-04","title":"D4","lastModifiedAt":"2026-11-04T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-04"}"#,
+            #"{"id":"d-03","title":"D3","lastModifiedAt":"2026-11-03T10:00:00Z","clickableLink":"craftdocs://open?spaceId=space-1&documentId=d-03"}"#,
         ].joined(separator: ",")
         CraftStubURLProtocol.setHandler { request in
             if request.url?.path.hasSuffix("/connection") == true {
@@ -507,10 +509,14 @@ struct CraftTests {
             "lastModifiedAt-desc, stable among ties; the two undated rows sort last and fall off the 12-cap")
         let first = try #require(result.items.first)
         #expect(first.source == .craft)
-        #expect(first.openUrl == "", "craft rows are native-open rows: the preview pane never mounts them")
-        #expect(first.deepLink == "craftdocs://open?spaceId=space-1&blockId=d-new")
+        #expect(
+            first.openUrl == "https://docs.craft.do/editor/d/space-1/d-new",
+            "the preview URL comes from the clickableLink's values, not the row id")
+        #expect(first.deepLink == "craftdocs://open?spaceId=space-1&documentId=d-new")
         #expect(first.updatedAt == "2026-11-20T10:00:00Z", "the API's date, not fetch time")
-        #expect(result.items.allSatisfy { $0.openUrl.isEmpty })
+        #expect(result.items.allSatisfy {
+            $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/space-1/")
+        })
         #expect(result.items.allSatisfy { ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
     }
 
@@ -532,15 +538,32 @@ struct CraftTests {
     @Test("The API's clickableLink wins; anything else falls back to hand-built")
     func clickableLinkMapping() {
         let fetchedAt = "2026-11-21T00:00:00Z"
-        // A craftdocs:// clickableLink is trusted verbatim.
+        // A craftdocs:// clickableLink is trusted verbatim, and the preview
+        // URL is built from the LINK's values — not the credential space id.
         let api = craftDocItem(
             from: CraftDocument(
                 id: "d1", title: "T",
                 clickableLink: "craftdocs://open?spaceId=live&documentId=d1")!,
             spaceId: "space-1", fetchedAt: fetchedAt)
         #expect(api.deepLink == "craftdocs://open?spaceId=live&documentId=d1")
-        #expect(api.openUrl == "")
-        // An https editor link is rejected — the pane cannot render it.
+        #expect(api.openUrl == "https://docs.craft.do/editor/d/live/d1")
+        // Observed-bug regression: the clickableLink's documentId is a
+        // different id family than the row's API id for the same doc — the
+        // editor URL must carry the link's id, never the row id (the old
+        // root-block URL hangs the editor on its loading skeleton).
+        let diverged = craftDocItem(
+            from: CraftDocument(
+                id: "7bd0a593-3f45-4664-b11c-35d54fa01665", title: "T",
+                clickableLink:
+                    "craftdocs://open?spaceId=f9127855-9d9a-f50c-8b9c-754a16c62d86&documentId=277fa729-cd4a-4645-ad15-f085b00495c4")!,
+            spaceId: "space-1", fetchedAt: fetchedAt)
+        #expect(
+            diverged.openUrl
+                == "https://docs.craft.do/editor/d/f9127855-9d9a-f50c-8b9c-754a16c62d86/277fa729-cd4a-4645-ad15-f085b00495c4")
+        #expect(!diverged.openUrl.contains("7bd0a593"), "the row id never reaches the editor URL")
+        // An https editor link is rejected — the deepLink must remain a
+        // native `craftdocs://` target, and with no validated link the row
+        // carries no web URL (native fallback).
         let https = craftDocItem(
             from: CraftDocument(
                 id: "d2", title: "T",
@@ -548,19 +571,55 @@ struct CraftTests {
             spaceId: "space-1", fetchedAt: fetchedAt)
         #expect(https.deepLink == "craftdocs://open?spaceId=space-1&blockId=d2")
         #expect(https.openUrl == "")
-        // Garbage never reaches a row either.
+        // Garbage never reaches the deepLink either, and yields no web URL.
         let garbage = craftDocItem(
             from: CraftDocument(id: "d3", title: "T", clickableLink: "not a url")!,
             spaceId: "space-1", fetchedAt: fetchedAt)
         #expect(garbage.deepLink == "craftdocs://open?spaceId=space-1&blockId=d3")
         #expect(garbage.openUrl == "")
-        // No metadata at all: the hand-built link, and the fetch time.
+        // No metadata at all: the hand-built link, the fetch time, and no
+        // web URL (native fallback).
         let bare = craftDocItem(
             from: CraftDocument(id: "d4", title: "T")!,
             spaceId: "space-1", fetchedAt: fetchedAt)
         #expect(bare.deepLink == "craftdocs://open?spaceId=space-1&blockId=d4")
         #expect(bare.updatedAt == fetchedAt)
         #expect(bare.openUrl == "")
+    }
+
+    @Test("Web editor URLs need a space id and encode both segments")
+    func webEditorURLs() {
+        #expect(
+            craftWebEditorURL(spaceId: "space-1", documentId: "d1")
+                == "https://docs.craft.do/editor/d/space-1/d1")
+        #expect(
+            craftWebEditorURL(spaceId: "s 1", documentId: "s/x")
+                == "https://docs.craft.do/editor/d/s%201/s%2Fx")
+        #expect(craftWebEditorURL(spaceId: nil, documentId: "d1") == nil)
+        #expect(craftWebEditorURL(spaceId: "", documentId: "d1") == nil)
+        // The parser builds from the clickableLink's own values: a
+        // validated link yields the editor URL, anything else yields nil —
+        // never a substitution of the credential space id.
+        #expect(
+            craftWebEditorURL(fromClickableLink: "craftdocs://open?spaceId=live&documentId=d1")
+                == "https://docs.craft.do/editor/d/live/d1")
+        #expect(craftWebEditorURL(fromClickableLink: "craftdocs://open?spaceId=live") == nil)
+        #expect(craftWebEditorURL(fromClickableLink: "craftdocs://open?documentId=d1") == nil)
+        #expect(
+            craftWebEditorURL(fromClickableLink: "https://docs.craft.do/editor/d/s/d1") == nil)
+        #expect(craftWebEditorURL(fromClickableLink: "not a url") == nil)
+        #expect(craftWebEditorURL(fromClickableLink: nil) == nil)
+        // No validated link (a legacy credential): the row carries no web
+        // URL and opens natively via its deepLink.
+        let legacy = craftDocItem(
+            from: CraftDocument(id: "d9", title: "T")!,
+            spaceId: nil, fetchedAt: "2026-11-21T00:00:00Z")
+        #expect(legacy.openUrl == "")
+        #expect(legacy.deepLink == "craftdocs://open?blockId=d9")
+        let legacyEmpty = craftDocItem(
+            from: CraftDocument(id: "d9", title: "T")!,
+            spaceId: "", fetchedAt: "2026-11-21T00:00:00Z")
+        #expect(legacyEmpty.openUrl == "")
     }
 
     @Test("A dead network lists as unreachable, never empty-ok")
@@ -594,19 +653,24 @@ struct CraftTests {
         #expect(result.items.count == 12)
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
-        // Native-open rows: no web editor URL, only the craftdocs deep link.
-        #expect(result.items.allSatisfy { $0.openUrl.isEmpty })
+        // Rows preview at the web editor built from the clickableLink
+        // values, with the craftdocs deep link secondary.
         #expect(result.items.allSatisfy {
-            ($0.deepLink ?? "").hasPrefix("craftdocs://open?")
+            $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/fixture-space/")
+                && ($0.deepLink ?? "").hasPrefix("craftdocs://open?")
         })
         // Served path must emit the canonical `s/…` table row-for-row —
         // the same ids `DocsFixtures`, the renderer `DOC_FIXTURES`, and the
         // pin tests agree on — or ?mokiDoc breaks under MOKI_FIXTURES=1.
         #expect(result.items.map(\.id) == DocsFixtures.craftRecents().map(\.id))
         #expect(
+            result.items.first?.openUrl
+                == "https://docs.craft.do/editor/d/fixture-space/A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6",
+            "fixture openUrls carry the editor id, not the row id")
+        #expect(
             result.items.first?.deepLink
-                == "craftdocs://open?spaceId=fixture-space&blockId=s/launch-checklist-a1b2c3",
-            "fixture ids carry `/` unencoded — URLComponents would emit %2F and break byte-agreement")
+                == "craftdocs://open?spaceId=fixture-space&documentId=A7C5E2D4-93B1-4F0E-9F27-F1B2C3D4E5F6",
+            "fixture deepLinks carry the editor id — never URLComponents on the row id")
     }
 
     @Test("Fixtures validate the shape but skip the network")
