@@ -174,6 +174,29 @@ describe('DocsLens', () => {
     expect(screen.getByTestId(`docs-row-${target.id}`).getAttribute('aria-current')).toBe('true')
   })
 
+  it('craft-to-craft picks keep one warm guest with src frozen', async () => {
+    renderLens()
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    // Drive is auto-selected, so the first craft pick is a cross-app
+    // remount: a fresh guest mounts on the picked editor URL.
+    fireEvent.click(screen.getByTestId(`docs-row-${first.id}`))
+    const frame = screen.getByTestId('docs-preview-frame')
+    expect(frame.getAttribute('src')).toBe(first.openUrl)
+    const run = vi.fn().mockResolvedValue(undefined)
+    ;(frame as unknown as Record<string, unknown>).executeJavaScript = run
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    // The second craft doc arrives inside the same running app: the guest
+    // element is reused, the pane never re-loadURLs (src frozen), and the
+    // new doc is an in-page hop through the guest's script engine.
+    fireEvent.click(screen.getByTestId(`docs-row-${second.id}`))
+    const kept = screen.getByTestId('docs-preview-frame')
+    expect(kept).toBe(frame)
+    expect(kept.getAttribute('src')).toBe(first.openUrl)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    expect((run.mock.calls[0][0] as string)).toContain(JSON.stringify(second.openUrl))
+  })
+
   it('a single selection replaces the pane', () => {
     renderLens()
     const first = DOC_FIXTURES.drive[0]
@@ -302,6 +325,121 @@ describe('DocPreview', () => {
     // Expand remounts the guest on the peeked URL — the overlay covers the
     // swap until the new page's first dom-ready, same as a pick.
     expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+  })
+
+  /* Warm app switching (mok-ic6): same-origin picks keep the live guest —
+   * the pane's src stays frozen and the guest hops in-page — while a
+   * cross-origin pick remounts fresh. jsdom has no real webview, so the
+   * hop's executeJavaScript is a mock on the bound element and the
+   * guest's navigation events are dispatched the same way dom-ready is. */
+  function mockHop(frame: Element): ReturnType<typeof vi.fn> {
+    const run = vi.fn().mockResolvedValue(undefined)
+    ;(frame as unknown as Record<string, unknown>).executeJavaScript = run
+    return run
+  }
+
+  function guestInPage(url: string): Event {
+    const ev = new Event('did-navigate-in-page') as Event & { url?: string }
+    ev.url = url
+    return ev
+  }
+
+  it('a same-app pick keeps the live guest and hops in-page with src frozen', async () => {
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    expect(frame.getAttribute('src')).toBe(first.openUrl)
+    const run = mockHop(frame)
+    rerender(<DocPreview doc={second} />)
+    // The element itself is reused — identity, not just one frame.
+    const kept = screen.getByTestId('docs-preview-frame')
+    expect(kept).toBe(frame)
+    expect(kept.getAttribute('src')).toBe(first.openUrl)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    const script = run.mock.calls[0][0] as string
+    expect(script).toContain(JSON.stringify(second.openUrl))
+  })
+
+  it('clears the loading overlay on the in-page event for a same-app pick', () => {
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    mockHop(frame)
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    expect(screen.queryByTestId('docs-preview-loading')).toBeNull()
+    rerender(<DocPreview doc={second} />)
+    expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+    // dom-ready never fires for an in-page hop — the hop's own
+    // navigation event lands on the already-painted app and lifts it.
+    fireEvent(screen.getByTestId('docs-preview-frame'), guestInPage(second.openUrl))
+    expect(screen.queryByTestId('docs-preview-loading')).toBeNull()
+  })
+
+  it('a cross-app pick remounts the guest fresh', () => {
+    const { rerender } = render(<DocPreview doc={DOC_FIXTURES.drive[1]} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={DOC_FIXTURES.notion[2]} />)
+    const fresh = screen.getByTestId('docs-preview-frame')
+    expect(fresh).not.toBe(frame)
+    expect(fresh.getAttribute('src')).toBe(DOC_FIXTURES.notion[2].openUrl)
+    // Same commit: the blank guest and the overlay render together —
+    // no white-flash frame with the overlay down.
+    expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+  })
+
+  it('a same-id url rotation remounts with the overlay up', () => {
+    // A refetch can change a row's openUrl without changing its id — the
+    // per-doc reset never fires, so the mount itself must cover the swap.
+    const rotated = { ...DOC_FIXTURES.drive[0], openUrl: DOC_FIXTURES.notion[0].openUrl }
+    const { rerender } = render(<DocPreview doc={DOC_FIXTURES.drive[0]} />)
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={rotated} />)
+    expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(rotated.openUrl)
+  })
+
+  it('an empty-pane interlude never pre-loads the stale doc', () => {
+    const first = DOC_FIXTURES.notion[0]
+    const second = DOC_FIXTURES.notion[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    // The selection vanishing (sign-out, refetch) empties the pane and
+    // unmounts the guest — the committed src must not survive it.
+    rerender(<DocPreview doc={null} />)
+    expect(screen.getByTestId('docs-preview-empty')).toBeDefined()
+    rerender(<DocPreview doc={second} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    expect(frame.getAttribute('src')).toBe(second.openUrl)
+  })
+
+  it('a same-app pick without script injection falls back to a full load', async () => {
+    // No executeJavaScript on the jsdom element: the hop rejects like a
+    // missing guest and the pane commits src — cold but correct, no crash.
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={second} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(second.openUrl)
+    })
+  })
+
+  it('a rejected hop falls back to a full src load', async () => {
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const run = mockHop(screen.getByTestId('docs-preview-frame'))
+    run.mockRejectedValueOnce(new Error('injection failed'))
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={second} />)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(second.openUrl)
+    })
   })
 })
 

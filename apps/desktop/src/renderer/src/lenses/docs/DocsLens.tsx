@@ -334,7 +334,7 @@ export function DocsLens(): React.JSX.Element {
         ))}
       </GlassPane>
       <GlassPane className="moki-inbox-thread" data-testid="docs-preview-pane">
-        <DocPreview key={selected?.id ?? 'none'} doc={selected} />
+        <DocPreview doc={selected} />
       </GlassPane>
     </div>
   )

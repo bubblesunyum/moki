@@ -9,6 +9,7 @@ export interface WebviewGuestElement extends HTMLElement {
   goForward?(): void
   reload?(): void
   getWebContentsId?(): number
+  executeJavaScript?(code: string, userGesture?: boolean): Promise<unknown>
 }
 
 export interface WebviewGuestEvents {
@@ -17,6 +18,11 @@ export interface WebviewGuestEvents {
    * imminent. Optional so existing consumers (Day tile, Peek) keep their
    * behavior untouched. */
   onReady?(): void
+  /* In-page signal: the guest's main-frame `did-navigate-in-page` fired —
+   * history.pushState hops included — so an already-painted app routed
+   * without reloading. Optional, same as onReady: consumers that ignore
+   * it behave exactly as before. */
+  onInPage?(url: string): void
 }
 
 /* Popup route, renderer half. Main denies the native window and forwards
@@ -83,6 +89,7 @@ export function useSandboxedWebview(events: WebviewGuestEvents): {
   setView: (el: WebviewGuestElement | null) => void
   go: (where: 'back' | 'forward' | 'reload') => void
   isOwnGuest: (id: unknown) => boolean
+  routeInPage: (url: string) => Promise<void>
 } {
   const viewRef = useRef<WebviewGuestElement | null>(null)
   const eventsRef = useRef(events)
@@ -102,6 +109,9 @@ export function useSandboxedWebview(events: WebviewGuestEvents): {
        * tracks where the page actually landed. */
       if ((e as Event & { isMainFrame?: unknown }).isMainFrame === false) return
       onNavigate(e)
+      const url = (e as Event & { url?: unknown }).url
+      if (typeof url !== 'string' || normalizeAddress(url) === null) return
+      eventsRef.current.onInPage?.(url)
     },
     [onNavigate]
   )
@@ -156,5 +166,30 @@ export function useSandboxedWebview(events: WebviewGuestEvents): {
     }
   }, [])
 
-  return { setView, go, isOwnGuest }
+  /* In-page route hop for warm app switching (the docs preview pane):
+   * runs a history.pushState + popstate hop inside the live guest so the
+   * site's running app routes itself without reloading. The URL rides
+   * the same http(s) allowlist as every other navigation, and is
+   * JSON-embedded into the script string, never interpolated raw.
+   * Guarded like every other guest call: rejects — never throws — when
+   * there is no live guest, the guest cannot run script (jsdom), or the
+   * URL is unsafe, so the caller can fall back to a full src load.
+   * Same-origin callers only: the guest element outlives the hop, so a
+   * cross-origin hop would inherit the old page's storage. */
+  const routeInPage = useCallback((url: string): Promise<void> => {
+    try {
+      const view = viewRef.current
+      if (typeof view?.executeJavaScript !== 'function')
+        return Promise.reject(new Error('no live webview guest'))
+      if (normalizeAddress(url) === null) return Promise.reject(new Error('unsafe route url'))
+      const script =
+        `history.pushState({}, '', ${JSON.stringify(url)});` +
+        `dispatchEvent(new PopStateEvent('popstate', { state: null }));`
+      return view.executeJavaScript(script, false).then(() => undefined)
+    } catch (err) {
+      return Promise.reject(err instanceof Error ? err : new Error('route hop failed'))
+    }
+  }, [])
+
+  return { setView, go, isOwnGuest, routeInPage }
 }

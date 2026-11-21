@@ -3,28 +3,31 @@ import { getBridge } from '../../rpc/bridge'
 import { Icon, IconButton, QuietState, Text } from '../../ui'
 import { WebPeek } from '../day/widgets/WebPeek'
 import { useSandboxedWebview, useWebviewPopup } from '../day/widgets/useWebviewGuest'
-import { hostOf, isSecureUrl, WEBVIEW_GUEST_ATTRS } from '../day/widgets/webviewShared'
+import { hostOf, isSecureUrl, originOf, WEBVIEW_GUEST_ATTRS } from '../day/widgets/webviewShared'
 import type { DocItem } from '../../../../../../../packages/protocol/src/index'
 
 /* Right-pane preview: the selected doc loads in the shared hardened guest
  * (same persist:moki-websites session as the Day tile and Peek, so a sign-in
  * started anywhere finishes logged in) under a small nav bar — Back /
- * Forward / Reload / host / Open in browser. `key` on the open URL remounts
- * the guest per selection, so a new pick never inherits the old page's
- * redirects. Auth redirects inside the pane follow along and retitle it;
- * popups (OAuth windows, target=_blank) open as a Peek over the shell. */
+ * Forward / Reload / host / Open in browser. The guest is keyed by app
+ * origin, not by URL: a same-app pick keeps the live element and hops
+ * in-page, while a different app remounts fresh. Auth redirects inside
+ * the pane follow along and retitle it; popups (OAuth windows,
+ * target=_blank) open as a Peek over the shell. */
 
 export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element {
   const [peek, setPeek] = useState<string | null>(null)
   const [current, setCurrent] = useState<string | null>(null)
-  /* Load-state: the guest hard-remounts per pick (key below, deliberate
-   * isolation) and paints white until its page exists — the quiet overlay
-   * covers that flash until the guest's first dom-ready. A same-src reload
-   * reuses the painted page, so the overlay stays down. */
+  /* Load-state: the guest paints white until its page exists — the quiet
+   * overlay covers that flash until the guest's first dom-ready. Same-app
+   * picks hop in-page (no dom-ready fires), so the in-page navigation
+   * event lifts the overlay there instead. A same-src reload reuses the
+   * painted page, so the overlay stays down. */
   const [ready, setReady] = useState(false)
-  const { setView, go } = useSandboxedWebview({
+  const { setView, go, routeInPage } = useSandboxedWebview({
     onNavigate: (url) => setCurrent(url),
-    onReady: () => setReady(true)
+    onReady: () => setReady(true),
+    onInPage: () => setReady(true)
   })
   useWebviewPopup(setPeek)
 
@@ -35,13 +38,65 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
   const [override, setOverride] = useState<string | null>(null)
 
   /* A new pick replaces the pane: drop any Expand override, retitle, and
-   * raise the loading overlay for the incoming page. */
+   * raise the loading overlay for the incoming page. An open peek belongs
+   * to the old pick, so it closes too — the pane is long-lived now, and
+   * nothing else owns that reset. */
   const docId = doc?.id
   useEffect(() => {
     setOverride(null)
     setCurrent(null)
     setReady(false)
+    setPeek(null)
   }, [docId])
+
+  /* The URL the pane wants to show. Pre-return (doc may be null): the
+   * commit/hop state below must sit above the empty-state return with the
+   * other hooks. Past the return this always equals `loaded`. */
+  const nextUrl: string | null = override ?? doc?.openUrl ?? null
+
+  /* Committed src: frozen while the app origin is unchanged, so React
+   * never re-loadURLs the live guest out from under itself. Adopted
+   * during render on a cross-origin pick (a remount, one commit, no
+   * double load); same-origin picks leave it untouched and hop below.
+   * An empty pane clears it — the guest unmounts with the pane, so a
+   * stale src must never pre-load the next pick's app. */
+  const [committedSrc, setCommittedSrc] = useState<string | null>(null)
+  if (nextUrl === null) {
+    if (committedSrc !== null) setCommittedSrc(null)
+  } else if (committedSrc === null || originOf(committedSrc) !== originOf(nextUrl)) {
+    setCommittedSrc(nextUrl)
+  }
+
+  /* A remount means a blank guest: readiness resets with the mount, in
+   * the same commit — a post-paint effect would lag a frame and flash
+   * the blank page with the overlay down. Same-origin hops keep
+   * readiness; the app stays painted and the pick effect covers them. */
+  const guestKey = committedSrc === null ? null : originOf(committedSrc)
+  const [mountedKey, setMountedKey] = useState<string | null>(null)
+  if (guestKey !== mountedKey) {
+    setMountedKey(guestKey)
+    if (guestKey !== null) setReady(false)
+  }
+
+  /* Same-app warm switch: the frozen src stays put and the live guest
+   * hops in-page instead — a history.pushState the SPA routes itself
+   * (popstate is the router contract; the pane's Reload is the honest
+   * escape hatch if an app misroutes). The hop's own in-page navigation
+   * event lifts the overlay. Injection failure falls back to a cold src
+   * commit: correct, just not warm. Unsafe URLs never reach the hop —
+   * the hook rejects them — and cross-origin picks adopt above, so this
+   * effect only ever sees same-origin http(s) pairs. */
+  useEffect(() => {
+    if (nextUrl === null || committedSrc === null || nextUrl === committedSrc) return
+    if (originOf(nextUrl) !== originOf(committedSrc)) return
+    let cancelled = false
+    routeInPage(nextUrl).catch(() => {
+      if (!cancelled) setCommittedSrc(nextUrl)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [nextUrl, committedSrc, routeInPage])
 
   if (doc === null) {
     return (
@@ -59,8 +114,10 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
   }
 
   function expandPeek(url: string): void {
-    /* Same as a pick: the expanded URL remounts the guest (key below), so
-     * raise the overlay until the new page's first dom-ready. */
+    /* Same rules as a pick: a same-app expand hops the live guest (the
+     * effect above owns it), a cross-app one remounts it. Either way the
+     * overlay covers the swap — until the in-page event for a hop, until
+     * the new page's first dom-ready for a remount. */
     setReady(false)
     setOverride(url)
     setCurrent(url)
@@ -90,12 +147,12 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
           onClick={openOutside}
         />
       </div>
-      <div className="moki-docs-preview-frame-wrap" key={loaded}>
+      <div className="moki-docs-preview-frame-wrap" key={originOf(committedSrc ?? loaded)}>
         {createElement('webview', {
           ref: setView,
           className: 'moki-docs-preview-frame',
           'data-testid': 'docs-preview-frame',
-          src: loaded,
+          src: committedSrc ?? loaded,
           ...WEBVIEW_GUEST_ATTRS
         })}
         {!ready && (

@@ -25,6 +25,19 @@ export const WEBVIEW_GUEST_ATTRS = {
   allowpopups: ''
 } as const
 
+/* App identity for warm switching: same-origin picks (two craft docs,
+ * two notion pages) keep the live guest and hop in-page, so the site's
+ * running app — sidebar prefs, SPA memory — survives the switch. A
+ * different origin remounts fresh. Unparseable URLs fall back to the raw
+ * string, so each one still remounts in isolation. */
+export function originOf(url: string): string {
+  try {
+    return new URL(url).origin
+  } catch {
+    return url
+  }
+}
+
 /* https-only allowlist: explicit http(s) URLs pass through as typed, bare
  * hosts gain an https:// scheme, everything else is rejected and nothing
  * loads (no javascript:, data:, file:, ftp:, or scheme-relative games). */
