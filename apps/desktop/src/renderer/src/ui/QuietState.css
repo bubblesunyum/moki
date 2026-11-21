@@ -6,3 +6,11 @@
   padding: var(--moki-space-24) var(--moki-space-12);
   color: var(--moki-color-muted);
 }
+
+.moki-quiet-state--start {
+  justify-content: flex-start;
+}
+
+.moki-quiet-state--bare {
+  padding: 0;
+}

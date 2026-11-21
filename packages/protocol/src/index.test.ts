@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   PROTOCOL_VERSION,
   WEBSITES_PARTITION,
+  isCraftDeepLink,
   isExternalHttpUrl,
+  isOpenExternalAllowedUrl,
   type DocItem,
   type DocsListRecentsParams,
   type DocsListRecentsResult,
+  type DocsSignInPollResult,
   type MailGetThreadParams,
   type MailListThreadsParams,
   type MailListThreadsResult,
@@ -130,7 +133,8 @@ describe('protocol', () => {
     expect(WEBSITES_PARTITION).toBe('persist:moki-websites')
   })
 
-  it('accepts only absolute http(s) URLs for openExternal', () => {    expect(isExternalHttpUrl('https://example.com/x')).toBe(true)
+  it('accepts only absolute http(s) URLs for openExternal', () => {
+    expect(isExternalHttpUrl('https://example.com/x')).toBe(true)
     expect(isExternalHttpUrl('http://example.com')).toBe(true)
     expect(isExternalHttpUrl('  https://example.com/  ')).toBe(true)
     expect(isExternalHttpUrl('file:///etc/passwd')).toBe(false)
@@ -142,6 +146,20 @@ describe('protocol', () => {
     expect(isExternalHttpUrl(null)).toBe(false)
     expect(isExternalHttpUrl(42)).toBe(false)
     expect(isExternalHttpUrl({})).toBe(false)
+  })
+
+  it('allows only Craft native-app open links beyond http(s)', () => {
+    expect(isCraftDeepLink('craftdocs://open?spaceId=abc&blockId=def')).toBe(true)
+    expect(isCraftDeepLink('craftdocs://open')).toBe(true)
+    expect(isCraftDeepLink('craftdocs://open?spaceId=a+b&blockId=c:d')).toBe(true)
+    expect(isCraftDeepLink('craftdocs://open foo')).toBe(false)
+    expect(isCraftDeepLink('craftdocs://open\\evil.com')).toBe(false)
+    expect(isCraftDeepLink('craftdocs:open')).toBe(false)
+    expect(isCraftDeepLink('https://craft.do')).toBe(false)
+    expect(isCraftDeepLink(undefined)).toBe(false)
+    expect(isOpenExternalAllowedUrl('https://example.com')).toBe(true)
+    expect(isOpenExternalAllowedUrl('craftdocs://open?blockId=x')).toBe(true)
+    expect(isOpenExternalAllowedUrl('file:///etc/passwd')).toBe(false)
   })
 
   it('types docs.listRecents with one source param', () => {
@@ -199,6 +217,25 @@ describe('protocol', () => {
     expect(setResult.ok).toBe(true)
     expect(signOutResult.ok).toBe(true)
     expect(listResult.status).toBe('ok')
+  })
+
+  it('types the Docs OAuth sign-in methods with a shared poll shape', () => {
+    const done: DocsSignInPollResult = { status: 'done', account: 'Notion' }
+    const pending: DocsSignInPollResult = { status: 'pending' }
+    const failed: DocsSignInPollResult = { status: 'error', message: 'declined' }
+    const notionPoll: RpcMethodMap['notion.signInPoll']['result'] = done
+    const notionStart: RpcMethodMap['notion.signInStart']['result'] = { ok: true }
+    const notionCancel: RpcMethodMap['notion.signInCancel']['result'] = { ok: true }
+    const craftPoll: RpcMethodMap['craft.signInPoll']['result'] = failed
+    const craftStart: RpcMethodMap['craft.signInStart']['result'] = { ok: true }
+    const craftCancel: RpcMethodMap['craft.signInCancel']['result'] = { ok: true }
+    expect(notionPoll.status).toBe('done')
+    expect(pending.status).toBe('pending')
+    expect(craftPoll.message).toBe('declined')
+    expect(notionStart.ok).toBe(true)
+    expect(notionCancel.ok).toBe(true)
+    expect(craftStart.ok).toBe(true)
+    expect(craftCancel.ok).toBe(true)
   })
 
   it('carries rate_limited through the shared error shape', () => {

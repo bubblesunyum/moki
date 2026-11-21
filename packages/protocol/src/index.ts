@@ -171,17 +171,23 @@ export interface CraftConnectValidateResult {
   spaceName?: string
 }
 
-/** Google sign-in for Drive (Desktop OAuth, PKCE + loopback — the RPC
- * timeout is 15s, so start returns at once and the renderer polls). */
-export type GoogleSignInPollStatus = 'pending' | 'done' | 'error'
+/** Shared sign-in poll shape for the Docs OAuth flows (Google, Notion,
+ * Craft): start returns at once (the RPC timeout is 15s, so a consent
+ * wait can never be one long-poll) and the renderer polls
+ * pending/done/error. */
+export type DocsSignInPollStatus = 'pending' | 'done' | 'error'
 
-export interface GoogleSignInPollResult {
-  status: GoogleSignInPollStatus
-  /** Present when done: the address that was signed in. */
+export interface DocsSignInPollResult {
+  status: DocsSignInPollStatus
+  /** Present when done: the account/workspace that was signed in. */
   account?: string
   /** Present when error: one-line cause. */
   message?: string
 }
+
+/** Google's names stay exported for existing imports; same shape. */
+export type GoogleSignInPollStatus = DocsSignInPollStatus
+export type GoogleSignInPollResult = DocsSignInPollResult
 
 export interface RpcMethodMap {
   'helper.ping': { params: void; result: { ok: boolean; version: string } }
@@ -199,6 +205,12 @@ export interface RpcMethodMap {
   'google.signInStart': { params: void; result: { ok: boolean } }
   'google.signInPoll': { params: void; result: GoogleSignInPollResult }
   'google.signInCancel': { params: void; result: { ok: boolean } }
+  'notion.signInStart': { params: void; result: { ok: boolean } }
+  'notion.signInPoll': { params: void; result: DocsSignInPollResult }
+  'notion.signInCancel': { params: void; result: { ok: boolean } }
+  'craft.signInStart': { params: void; result: { ok: boolean } }
+  'craft.signInPoll': { params: void; result: DocsSignInPollResult }
+  'craft.signInCancel': { params: void; result: { ok: boolean } }
 }
 
 export type RpcMethod = keyof RpcMethodMap
@@ -303,6 +315,19 @@ export interface RpcErrorShape {
 /** True for absolute http(s) URLs safe to hand to `shell.openExternal`. */
 export function isExternalHttpUrl(url: unknown): url is string {
   return typeof url === 'string' && /^https?:\/\/[^/\s]/i.test(url.trim())
+}
+
+/** True for Craft's native-app deep link (`craftdocs://open?spaceId=&blockId=`).
+ * Preload and main both gate `openExternal` on this one definition, so the
+ * two allowlists cannot drift. Nothing else broadens the scheme. */
+export function isCraftDeepLink(url: unknown): url is string {
+  return typeof url === 'string' && /^craftdocs:\/\/[A-Za-z0-9/?&=_.%+:\-]+$/.test(url)
+}
+
+/** The complete `openExternal` allowlist, shared by preload and main:
+ * http(s) pages plus Craft's native-app link. */
+export function isOpenExternalAllowedUrl(url: unknown): url is string {
+  return isExternalHttpUrl(url) || isCraftDeepLink(url)
 }
 
 /** The one persisted session partition every web surface shares (Day tile,

@@ -178,7 +178,7 @@ func notionStatusError(status: Int) -> Error {
     case 401:
         return AppError(
             code: "auth_expired",
-            message: "Notion authorization expired. Paste a new integration token to reconnect.")
+            message: "Notion authorization expired. Sign in again to reconnect.")
     case 429:
         return AppError(
             code: "rate_limited",

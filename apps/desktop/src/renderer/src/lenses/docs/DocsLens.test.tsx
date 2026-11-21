@@ -240,11 +240,10 @@ describe('DocPreview', () => {
   })
 })
 
-/* Signed-out states (mok-8uu.6/12): every auth state explains itself and
- * offers its real action — Drive's Google sign-in button, Craft's
- * connection-URL form, the Notion token explainer. Empty-unreachable Craft
- * (no credential to fix) keeps Open Craft loading the home page in the
- * preview. */
+/* Signed-out states (mok-8uu.6/12, mok-68k/0xc): every auth state explains
+ * itself and offers its real browser-approval action — Drive, Craft and
+ * Notion all share the same sign-in control. Empty-unreachable Craft (no
+ * credential to fix) keeps Open Craft loading the home page in the preview. */
 describe('Docs signed-out states', () => {
   function signedOutBridge(signedOutSource: DocSource): void {
     setBridge((_method, params) => {
@@ -263,21 +262,21 @@ describe('Docs signed-out states', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Drive needs sign-in')).toBeDefined()
     })
-    expect(screen.getByText('Sign in to Google')).toBeDefined()
+    expect(screen.getByText('Connect Drive to list docs')).toBeDefined()
     expect(screen.getByText('Zen import signs in previews, not the list')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeDefined()
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.drive[0].id}`)).toBeNull()
   })
 
-  it('craft signed-out shows the connect form, not the preview home', async () => {
+  it('craft signed-out shows the OAuth control, not the preview home', async () => {
     signedOutBridge('craft')
     renderLens()
     await waitFor(() => {
       expect(screen.getByLabelText('Craft needs sign-in')).toBeDefined()
     })
     expect(screen.getByText('Connect Craft to list docs')).toBeDefined()
-    expect(screen.getByLabelText('Craft connection URL')).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Validate' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Sign in with Craft' })).toBeDefined()
+    expect(screen.getByText(/Choose a space in Craft/)).toBeDefined()
     // A credential fix exists — no Open Craft fallback here.
     expect(screen.queryByRole('button', { name: 'Open Craft' })).toBeNull()
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()
@@ -297,25 +296,16 @@ describe('Docs signed-out states', () => {
     expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe('https://www.craft.do')
   })
 
-  it('notion explains the token and links to settings', async () => {
-    const openExternal = vi.fn().mockResolvedValue(undefined)
-    setBridge(
-      (_method, params) => {
-        const source = (params as { source: DocSource }).source
-        return Promise.resolve({
-          items: source === 'notion' ? [] : DOC_FIXTURES[source],
-          unreachable: false,
-          signedOut: source === 'notion'
-        })
-      },
-      { openExternal }
-    )
+  it('notion offers browser approval and page selection', async () => {
+    signedOutBridge('notion')
     renderLens()
     await waitFor(() => {
       expect(screen.getByLabelText('Notion needs sign-in')).toBeDefined()
     })
+    expect(screen.getByRole('button', { name: 'Sign in with Notion' })).toBeDefined()
+    expect(screen.getByText(/Choose which pages Moki may list/)).toBeDefined()
     expect(screen.getByText(/stored only in the Mac Keychain/)).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'Notion settings' }))
-    expect(openExternal).toHaveBeenCalledWith('https://www.notion.so/my-integrations')
+    expect(screen.queryByLabelText('Notion integration token')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Notion settings' })).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
-  isExternalHttpUrl,
+  isOpenExternalAllowedUrl,
   type MokiApi
 } from '../../../../packages/protocol/src/index'
 import {
@@ -9,8 +9,8 @@ import {
 } from '../main/zenCookies.shared'
 
 // Sandbox-compatible preload: no Node APIs here, only contextBridge +
-// ipcRenderer. Types and the URL check come from packages/protocol; the
-// check is a pure function that bundles in, so nothing Node reaches the sandbox.
+// ipcRenderer. Types and the URL checks come from packages/protocol; the
+// checks are pure functions that bundle in, so nothing Node reaches the sandbox.
 const api: MokiApi = {
   call: (method, params) => ipcRenderer.invoke('rpc', method, params) as never,
 
@@ -27,8 +27,8 @@ const api: MokiApi = {
   },
 
   openExternal: (url) => {
-    if (!isExternalHttpUrl(url)) {
-      return Promise.reject(new Error('blocked non-http(s) URL'))
+    if (!isOpenExternalAllowedUrl(url)) {
+      return Promise.reject(new Error('blocked URL'))
     }
     return ipcRenderer.invoke('shell:openExternal', url) as Promise<void>
   },

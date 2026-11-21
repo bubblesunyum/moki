@@ -1,5 +1,5 @@
 import type { BrowserWindow, IpcMain, Shell } from 'electron'
-import { isExternalHttpUrl } from '../../../../../packages/protocol/src/index'
+import { isOpenExternalAllowedUrl } from '../../../../../packages/protocol/src/index'
 import type { HelperProcess } from './helperProcess'
 
 const RPC_CHANNEL = 'rpc'
@@ -21,17 +21,12 @@ function broadcast(
 
 /**
  * Whether a URL may leave the app via openExternal: http(s) pages, plus the
- * Craft native-app deep link (`craftdocs://open?spaceId=&blockId=` — the
- * API's own clickableLink shape, confirmed live in CCP). The craftdocs
- * pattern mirrors what `URLComponents` can emit in a query (its query-allowed
- * set leaves `+` and `:` literal), minus whitespace, backslashes and `@` —
- * so userinfo tricks and smuggled separators never pass. Everything else
+ * Craft native-app deep link. Both validators live in packages/protocol so
+ * this gate and the preload's earlier gate cannot drift; everything else
  * stays blocked.
  */
 export function isOpenExternalAllowed(url: unknown): url is string {
-  if (typeof url !== 'string') return false
-  if (isExternalHttpUrl(url)) return true
-  return /^craftdocs:\/\/[A-Za-z0-9/?&=_.%+:\-]+$/.test(url)
+  return isOpenExternalAllowedUrl(url)
 }
 
 /**

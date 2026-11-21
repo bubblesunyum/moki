@@ -9,8 +9,8 @@ import { useDocsRecents, type DocsRecents } from './useDocsRecents'
 import { callBridge, getBridge } from '../../rpc/bridge'
 import { ZenImportControl } from './ZenImportControl'
 import { NotionSignedOutExplainer } from './NotionAuth'
-import { GoogleSignInControl } from './GoogleAuth'
-import { CraftConnectForm } from './CraftAuth'
+import { DriveSignedOutExplainer } from './GoogleAuth'
+import { CraftSignedOutExplainer } from './CraftAuth'
 import '../mail/InboxLayout.css'
 import './DocsLens.css'
 
@@ -24,8 +24,8 @@ function queryParam(name: string): string | undefined {
  * and loads the Craft home page in the preview pane for browsing.
  * Presentation, not contract data — it lives here, not in fixtures.ts,
  * and never appears in any section's items (resolved by id outside
- * `all`). Signed-out Craft instead shows the connect form; live Craft
- * rows carry deepLinks and open externally, never in the preview. */
+ * `all`). Signed-out Craft instead shows the OAuth sign-in control; live
+ * Craft rows carry deepLinks and open externally, never in the preview. */
 const CRAFT_HOME_DOC: DocItem = {
   id: 'craft-home',
   title: 'Craft',
@@ -98,6 +98,29 @@ const SIGN_OUT_AFFORDANCE: Record<DocSource, React.JSX.Element | null> = {
   craft: <DocsSignOutButton source="craft" method="craftConnect.signOut" />
 }
 
+/* One signed-out geometry for every source: statement, browser-approval
+ * control, one quiet note. The three differ only in copy and control. */
+const SIGNED_OUT_AFFORDANCE: Record<
+  DocSource,
+  { text: string; label: string; auth: React.JSX.Element }
+> = {
+  drive: {
+    text: 'Connect Drive to list docs',
+    label: 'Drive needs sign-in',
+    auth: <DriveSignedOutExplainer />
+  },
+  notion: {
+    text: 'Connect Notion to list docs',
+    label: 'Notion needs sign-in',
+    auth: <NotionSignedOutExplainer />
+  },
+  craft: {
+    text: 'Connect Craft to list docs',
+    label: 'Craft needs sign-in',
+    auth: <CraftSignedOutExplainer />
+  }
+}
+
 /* Capture override (dev only, via ?mokiDoc= on the startup URL): preselects
  * the fixture row with that id once sections arrive, so screenshots can pin
  * a preview. Unknown ids fall back to the first row. */
@@ -108,9 +131,6 @@ function preferredDocId(): string | undefined {
     return undefined
   }
 }
-
-/* Notion integration-token settings page: see NotionSignedOutExplainer in
- * NotionAuth (the token itself stays Keychain-only). */
 
 function DocRow({
   doc,
@@ -161,10 +181,10 @@ function DocSection({
   selectedId: string | null
   onSelect: (doc: DocItem) => void
 }): React.JSX.Element {
-  /* Notion and Craft carry their own auth affordances: the token /
-   * connect form in the signed-out state, a sign-out button beside the
-   * title once signed in. Both need the bridge; fixture mode (plain
-   * browser, captures) stays clean without them. */
+  /* Notion and Craft carry their own auth affordances: the shared
+   * browser-approval control in the signed-out state, a sign-out button
+   * beside the title once signed in. Both need the bridge; fixture mode
+   * (plain browser, captures) stays clean without them. */
   const hasBridge = getBridge() !== null
   const showSignOut =
     (source === 'notion' || source === 'craft') &&
@@ -196,39 +216,14 @@ function DocSection({
           </Text>
         </div>
         <div className="moki-docs-section-state">
-          {source === 'drive' && (
-            <>
-              <QuietState
-                icon="notes"
-                text="Sign in to Google"
-                label="Drive needs sign-in"
-                action={<GoogleSignInControl />}
-              />
-              <Text variant="small" tone="muted" as="p" className="moki-docs-auth-note">
-                Zen import signs in previews, not the list
-              </Text>
-            </>
-          )}
-          {source === 'craft' && (
-            <>
-              <QuietState icon="notes" text="Connect Craft to list docs" label="Craft needs sign-in" />
-              <div className="moki-docs-auth">
-                <CraftConnectForm />
-              </div>
-            </>
-          )}
-          {source === 'notion' && (
-            <>
-              <QuietState
-                icon="notes"
-                text="Sign in to Notion"
-                label="Notion needs sign-in"
-              />
-              <div className="moki-docs-auth">
-                <NotionSignedOutExplainer />
-              </div>
-            </>
-          )}
+          <QuietState
+            icon="notes"
+            text={SIGNED_OUT_AFFORDANCE[source].text}
+            label={SIGNED_OUT_AFFORDANCE[source].label}
+            align="start"
+            padding="none"
+          />
+          <div className="moki-docs-auth">{SIGNED_OUT_AFFORDANCE[source].auth}</div>
         </div>
       </section>
     )

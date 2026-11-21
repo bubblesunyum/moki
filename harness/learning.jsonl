@@ -3,3 +3,6 @@
 # Readers skip blank lines and lines starting with `#`, which is what this is.
 # {"kind":"finding","category":"<short-slug>","reviewer":"reviewer-taste|reviewer-correctness|reviewer-design","bead":"<bead-id>","outcome":"accepted|rejected","note":"<one line>","ts":"<UTC timestamp>"}
 # {"kind":"lesson","tier":"memory|reviewer-trap|skill|claude-md","target":"<memory-key|reviewer-file|skill-path|CLAUDE.md>","text":"<one line>","evidence":"<bead|commit|finding>","outcome":"kept|dropped","why":"<one line>","ts":"<UTC timestamp>"}
+{"evidence": "mok-68k", "kind": "lesson", "outcome": "kept", "target": "keychain-test-isolation", "text": "Decision recorded in memory key keychain-test-isolation", "tier": "memory", "ts": "2026-11-21T00:37:19Z", "why": "kept at close (--keep-lesson 1)"}
+{"evidence": "mok-68k", "kind": "lesson", "outcome": "kept", "target": "mcp-tool-schema-drift", "text": "Decision recorded in memory key mcp-tool-schema-drift", "tier": "memory", "ts": "2026-11-21T00:37:19Z", "why": "kept at close (--keep-lesson 2)"}
+{"evidence": "mok-0xc", "kind": "lesson", "outcome": "kept", "target": "oauth-start-cancel-race", "text": "Decision recorded in memory key oauth-start-cancel-race", "tier": "memory", "ts": "2026-11-21T00:37:19Z", "why": "kept at close (--keep-lesson 3)"}

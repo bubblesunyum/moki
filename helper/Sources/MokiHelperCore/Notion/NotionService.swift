@@ -12,22 +12,28 @@ public struct NotionService: Sendable {
     private let session: URLSession
     private let rateLimiter: NotionRateLimiter
     private let fixtures: Bool
+    private let mcpAuth: NotionMCPAuthService?
 
     public init(
         secrets: any SecretStoring = KeychainSecretStore(),
         session: URLSession = .shared,
         rateLimiter: NotionRateLimiter = NotionRateLimiter(),
-        fixtures: Bool = ProcessInfo.processInfo.environment["MOKI_FIXTURES"] == "1"
+        fixtures: Bool = ProcessInfo.processInfo.environment["MOKI_FIXTURES"] == "1",
+        mcpAuth: NotionMCPAuthService? = nil
     ) {
         self.secrets = secrets
         self.session = session
         self.rateLimiter = rateLimiter
         self.fixtures = fixtures
+        self.mcpAuth = mcpAuth
     }
 
-    /// 12 recents, last-edited first. No token → `signed_out` with no rows;
-    /// a rejected token → `auth_expired` with no rows; either way the token
-    /// itself never appears in the result.
+    /// 12 recents, last-edited first. No credential → `signed_out` with no
+    /// rows; a rejected credential → `auth_expired` with no rows; either
+    /// way the token itself never appears in the result.
+    ///
+    /// Credential order: the hosted-MCP OAuth grant first (MCP listing),
+    /// else the legacy internal integration token (REST search fallback).
     public func listRecents() async throws -> NotionRecentsResult {
         if fixtures {
             // Hermetic fixture auth: a fixtures sign-out flips the
@@ -37,6 +43,15 @@ public struct NotionService: Sendable {
                 return NotionRecentsResult(status: .signedOut, items: [])
             }
             return NotionRecentsResult(status: .ok, items: notionFixtureRecents())
+        }
+        if let mcpAuth {
+            do {
+                if let token = try await mcpAuth.freshAccessToken() {
+                    return try await mcpListRecents(accessToken: token)
+                }
+            } catch let error as AppError where error.code == "auth_expired" {
+                return NotionRecentsResult(status: .authExpired, items: [])
+            }
         }
         guard let token = secrets.read(
             service: MokiKeychainIDs.service,
@@ -77,6 +92,28 @@ public struct NotionService: Sendable {
         return NotionRecentsResult(status: .ok, items: Array(items))
     }
 
+    /// Hosted-MCP OAuth listing: the `notion-list-recent-pages` tool
+    /// (recency/frequency-ranked sidebar pages), mapped to `NotionRecent`s.
+    /// Auth failures surface as the signed-out-shaped envelope; rate
+    /// limits and transport failures throw for the partial path.
+    private func mcpListRecents(accessToken: String) async throws -> NotionRecentsResult {
+        try await rateLimiter.acquire()
+        let client = RemoteMCPClient(
+            endpoint: notionMCPMCPResourceURL, accessToken: accessToken, session: session)
+        let result: MCPToolResult
+        do {
+            result = try await client.callTool(
+                name: "notion-list-recent-pages",
+                arguments: .object(["limit": .int(notionMCPRecentsLimit)]))
+        } catch let error as AppError where error.code == "auth_expired" {
+            return NotionRecentsResult(status: .authExpired, items: [])
+        }
+        if result.isError {
+            throw AppError(code: "unreachable", message: "Notion request failed.")
+        }
+        return NotionRecentsResult(status: .ok, items: notionMCPRecents(from: result))
+    }
+
     /// Store a pasted integration token. Blank input is a caller bug →
     /// `InvalidParamsError`, never a Keychain write. The token is never
     /// echoed back.
@@ -102,7 +139,8 @@ public struct NotionService: Sendable {
         return NotionOK()
     }
 
-    /// Sign out: wipe the Keychain entry. Missing entry still succeeds.
+    /// Sign out: wipe the MCP grant and the legacy Keychain entry.
+    /// Missing entries still succeed.
     /// Under fixtures, flip the in-memory flag instead — the real Keychain
     /// entry is never touched, so a fixtures sign-out cannot delete the
     /// developer's real token.
@@ -111,7 +149,11 @@ public struct NotionService: Sendable {
             await NotionFixtureAuthState.shared.setSignedOut(true)
             return NotionOK()
         }
+        await mcpAuth?.revokeStoredGrant()
         do {
+            try secrets.delete(
+                service: MokiKeychainIDs.service,
+                account: MokiKeychainIDs.notionMCPGrantAccount)
             try secrets.delete(
                 service: MokiKeychainIDs.service,
                 account: MokiKeychainIDs.notionTokenAccount)
@@ -143,20 +185,53 @@ public func notionSignOutHandler(service: NotionService) -> @Sendable (JSONValue
 
 extension RPCServer {
     /// Register every Notion method. Called once from `moki-helper`'s `@main`
-    /// entry point; captures one service (one rate limiter) for the helper's
-    /// lifetime. Tests build their own service with an in-memory store.
+    /// entry point; captures one service (one rate limiter) plus one MCP
+    /// auth actor for the helper's lifetime. Tests build their own
+    /// service with an in-memory store. Under `MOKI_FIXTURES=1` the
+    /// sign-in methods answer unavailable stubs (no browser, no network).
+    /// `openBrowser`/`makeServer` are injectable so tests never open a
+    /// real browser or bind a real port.
+    /// Returns the service it registered, so the Docs dispatcher can hold
+    /// the exact same instance (and therefore the same MCP auth state) as
+    /// `notion.listRecents` / `notion.signIn*`.
+    @discardableResult
     public func registerNotionMethods(
         session: URLSession = .shared,
         secrets: any SecretStoring = KeychainSecretStore(),
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) {
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        openBrowser: (@Sendable (URL) -> Void)? = nil,
+        makeServer: (@Sendable () -> any OAuthLoopbackServing)? = nil
+    ) -> NotionService {
         let fixtures = environment["MOKI_FIXTURES"] == "1"
+        if fixtures {
+            let service = NotionService(
+                secrets: secrets, session: session,
+                rateLimiter: NotionRateLimiter(), fixtures: fixtures)
+            register("notion.listRecents", handler: notionListRecentsHandler(service: service))
+            register("notion.setToken", handler: notionSetTokenHandler(service: service))
+            register("notion.signOut", handler: notionSignOutHandler(service: service))
+            register("notion.signInStart", handler: notionSignInFixtureStartHandler())
+            register("notion.signInPoll", handler: notionSignInFixturePollHandler())
+            register("notion.signInCancel", handler: notionSignInFixtureCancelHandler())
+            return service
+        }
+        let mcpAuth = NotionMCPAuthService(
+            secrets: secrets,
+            session: session,
+            clock: Date.init,
+            openBrowser: openBrowser ?? openOAuthInSystemBrowser,
+            makeServer: makeServer ?? { OAuthLoopbackServer() })
         let service = NotionService(
             secrets: secrets, session: session,
-            rateLimiter: NotionRateLimiter(), fixtures: fixtures)
+            rateLimiter: NotionRateLimiter(), fixtures: fixtures,
+            mcpAuth: mcpAuth)
         register("notion.listRecents", handler: notionListRecentsHandler(service: service))
         register("notion.setToken", handler: notionSetTokenHandler(service: service))
         register("notion.signOut", handler: notionSignOutHandler(service: service))
+        register("notion.signInStart", handler: notionSignInStartHandler(service: mcpAuth))
+        register("notion.signInPoll", handler: notionSignInPollHandler(service: mcpAuth))
+        register("notion.signInCancel", handler: notionSignInCancelHandler(service: mcpAuth))
+        return service
     }
 }
 

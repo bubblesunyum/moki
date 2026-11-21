@@ -20,6 +20,8 @@ struct MokiHelper {
             await server.register("calendar.listEvents", handler: fixtureCalendarListEventsHandler())
             await server.register("docs.listDrive", handler: fixtureDriveListFilesHandler())
             await server.register("docs.listRecents", handler: fixtureDocsListRecentsHandler())
+            await server.registerNotionMethods()
+            await server.registerCraftMethods()
         } else {
             await server.register("accounts.list", handler: googleAccountsListHandler())
             let accounts = GoogleAccountsService()
@@ -31,13 +33,15 @@ struct MokiHelper {
             await server.register("calendar.listEvents", handler: calendarListEventsHandler(service: calendar))
             let drive = DriveService(accounts: accounts, session: .shared)
             await server.register("docs.listDrive", handler: driveListFilesHandler(service: drive))
-            let notion = NotionService()
-            let craft = CraftService(session: .shared)
+            // The Docs dispatcher must hold the very services the sign-in
+            // methods registered: a separate default-constructed service
+            // would never see the OAuth grant and would keep showing the
+            // signed-out state after a successful approval.
+            let notion = await server.registerNotionMethods()
+            let craft = await server.registerCraftMethods()
             let docs = DocsRecentsService(drive: drive, notion: notion, craft: craft)
             await server.register("docs.listRecents", handler: docsListRecentsHandler(service: docs))
         }
-        await server.registerNotionMethods()
-        await server.registerCraftMethods()
         await server.registerGoogleSignInMethods()
         await server.run()
     }

@@ -12,6 +12,10 @@ export interface QuietStateProps {
   action?: ReactNode
   /** Render as role="alert" for errors instead of role="status". */
   alert?: boolean
+  /** Centered by default; `start` aligns with a surrounding inset grid. */
+  align?: 'center' | 'start'
+  /** `none` lets a parent own the inset (used by grouped empty states). */
+  padding?: 'default' | 'none'
 }
 
 /* Quiet state: an icon plus one line, never a paragraph (spec "States").
@@ -21,10 +25,19 @@ export function QuietState({
   text,
   label,
   action,
-  alert = false
+  alert = false,
+  align = 'center',
+  padding = 'default'
 }: QuietStateProps): React.JSX.Element {
+  const classes = [
+    'moki-quiet-state',
+    align === 'start' ? 'moki-quiet-state--start' : '',
+    padding === 'none' ? 'moki-quiet-state--bare' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
-    <div className="moki-quiet-state" role={alert ? 'alert' : 'status'} aria-label={label}>
+    <div className={classes} role={alert ? 'alert' : 'status'} aria-label={label}>
       <Icon name={icon} size={16} />
       <Text variant="text">{text}</Text>
       {action}

@@ -8,15 +8,17 @@ import Foundation
 // method names (`docs.listDrive`, `notion.listRecents`) with different
 // shapes, so the live renderer path always errored into fixture-partial.
 // This dispatcher unifies them: Drive reuses `DriveService.listFiles`,
-// Notion reuses `NotionService.listRecents`, Craft reuses the Connect API's
-// `CraftService.listRecents` when a service is wired in — without one the
-// arm reports `unreachable`.
+// Notion reuses `NotionService.listRecents` (hosted MCP first, legacy
+// integration token as fallback), and Craft reuses
+// `CraftService.listRecents` (hosted MCP first, legacy Connect URL as
+// fallback) when a service is wired in.
 //
-// Tokens never leave the helper: the Notion integration token stays in the
-// Keychain behind `NotionService`, and only rows + status cross the RPC
-// boundary. No TaskGroup anywhere on this path (see swift-taskgroup-timeout
-// trap): Drive lists accounts sequentially inside `DriveService`, and the
-// Notion proxy is one serial search call behind its rate limiter.
+// Tokens never leave the helper: OAuth grants and any legacy credentials
+// stay in the Keychain behind their services, and only rows + status cross
+// the RPC boundary. No TaskGroup anywhere on this path (see
+// swift-taskgroup-timeout trap): Drive lists accounts sequentially inside
+// `DriveService`, and each provider is one serial request behind its own
+// limiter.
 
 /// `docs.listRecents` params: which Docs section to serve.
 public struct DocsListRecentsParams: Codable, Sendable {

@@ -13,6 +13,9 @@ import Security
 public enum MokiKeychainIDs {
     public static let service = "com.moki.helper"
     public static let notionTokenAccount = "notion-integration-token"
+    /// Hosted-MCP OAuth grant (DCR client id + refresh/access tokens as one
+    /// JSON entry), separate from the legacy integration token.
+    public static let notionMCPGrantAccount = "notion-mcp-grant"
 }
 
 /// Minimal secret-store surface: read/write/delete one string secret.

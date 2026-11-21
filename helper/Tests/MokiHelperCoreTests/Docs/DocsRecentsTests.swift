@@ -484,7 +484,8 @@ struct DocsRecentsTests {
             store: CraftCredentialStore(
                 locations: CraftLocations(
                     credentialURL: home.appendingPathComponent("craft-connection.json"))),
-            session: makeDocsStubSession(), fixtures: true)
+            session: makeDocsStubSession(), fixtures: true,
+            secrets: InMemorySecretStore())
         let service = DocsRecentsService(
             drive: makeDocsDriveService(home: home), notion: makeDocsNotionService(), craft: craft)
 
