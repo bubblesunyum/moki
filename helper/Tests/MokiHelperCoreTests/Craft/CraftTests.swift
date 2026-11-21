@@ -472,7 +472,9 @@ struct CraftTests {
         #expect(result.items.map(\.id) == (1...12).map { "d\($0)" }, "space order, unsorted")
         let first = try #require(result.items.first)
         #expect(first.source == .craft)
-        #expect(first.openUrl == "", "Craft rows never load in the webview guest")
+        #expect(
+            first.openUrl == "https://docs.craft.do/editor/d/space-1/d1",
+            "a known space id makes the row preview in the webview guest")
         #expect(first.deepLink == "craftdocs://open?spaceId=space-1&blockId=d1")
         #expect(first.updatedAt == iso8601String(Date(timeIntervalSince1970: 1_769_000_000)),
             "fetch-time ISO, not a modified date")
@@ -509,7 +511,10 @@ struct CraftTests {
         #expect(result.items.count == 12)
         #expect(result.unreachable == false)
         #expect(result.signedOut == false)
-        #expect(result.items.allSatisfy { $0.openUrl == "" && ($0.deepLink ?? "").hasPrefix("craftdocs://open?") })
+        #expect(result.items.allSatisfy {
+            $0.openUrl.hasPrefix("https://docs.craft.do/editor/d/fixture-space/")
+                && ($0.deepLink ?? "").hasPrefix("craftdocs://open?")
+        })
         // Served path must emit the canonical `s/…` table row-for-row —
         // the same ids `DocsFixtures`, the renderer `DOC_FIXTURES`, and the
         // pin tests agree on — or ?mokiDoc breaks under MOKI_FIXTURES=1.
@@ -722,6 +727,16 @@ private func craftMCPDocsStructured(_ rows: [[String: String]]) -> Data {
             + #"},"content":[{"type":"text","text":"[]"}]}}"#)
 }
 
+private func craftMCPTextResult(_ text: String) -> Data {
+    try! JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0", "id": 1,
+        "result": [
+            "content": [["type": "text", "text": text]],
+            "isError": false,
+        ] as [String: Any],
+    ])
+}
+
 private func craftMCPInitialize() -> Data {
     craftJSONData(
         #"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"craft"}}}"#)
@@ -753,6 +768,7 @@ private func stubCraftOAuthMCP(
     recordedDCR: CraftBox<Int>? = nil,
     recordedRefresh: CraftBox<Int>? = nil,
     recordedRevoke: CraftBox<[[String: String]]>? = nil,
+    connectionText: String? = nil,
     sessionID: String? = "craft-sess-1"
 ) {
     CraftStubURLProtocol.setHandler { request in
@@ -842,6 +858,11 @@ private func stubCraftOAuthMCP(
             case "tools/call":
                 if let body = craftStubBody(request), let text = String(data: body, encoding: .utf8) {
                     recordedArgs?.modify { $0.append(text) }
+                    if let connectionText, text.contains("connection info") {
+                        return (
+                            craftHTTPResponse(url: url, status: 200),
+                            craftMCPTextResult(connectionText))
+                    }
                 }
                 if let statuses = callStatuses, !statuses.read().isEmpty {
                     var next = 0
@@ -1053,6 +1074,33 @@ extension CraftTests {
             from: CraftMCPDocument(id: "s/x", title: "T", modifiedAt: nil, deepLink: nil))
         #expect(undated.updatedAt.isEmpty)
         #expect(undated.deepLink == "craftdocs://open?blockId=s/x")
+    }
+
+    @Test("Space ids parse from structured or JSON-text connection info")
+    func spaceIDParsing() {
+        #expect(craftSpaceID(from: MCPToolResult(
+            structuredContent: .object(["space": .object(["id": .string("sp-1"), "name": .string("N")])])))
+            == "sp-1")
+        #expect(craftSpaceID(from: MCPToolResult(text: #"{"space":{"id":"sp-2"}}"#)) == "sp-2")
+        #expect(craftSpaceID(from: MCPToolResult(text: #"{"space":{"name":"N"}}"#)) == nil)
+        #expect(craftSpaceID(from: MCPToolResult(text: #"{"space":{"id":""}}"#)) == nil)
+        #expect(craftSpaceID(from: MCPToolResult(text: "Space: N (id: sp-3)")) == nil)
+        #expect(craftSpaceID(from: MCPToolResult(text: nil)) == nil)
+    }
+
+    @Test("Web editor URLs need a space id and encode both segments")
+    func webEditorURLs() {
+        #expect(craftWebEditorURL(spaceId: "space-1", documentId: "d1")
+            == "https://docs.craft.do/editor/d/space-1/d1")
+        #expect(craftWebEditorURL(spaceId: "s 1", documentId: "s/x")
+            == "https://docs.craft.do/editor/d/s%201/s%2Fx")
+        #expect(craftWebEditorURL(spaceId: nil, documentId: "d1") == nil)
+        #expect(craftWebEditorURL(spaceId: "", documentId: "d1") == nil)
+        let linked = craftMCPDocItem(
+            from: CraftMCPDocument(id: "d1", title: "T", modifiedAt: nil, deepLink: nil),
+            spaceId: "space-1")
+        #expect(linked.openUrl == "https://docs.craft.do/editor/d/space-1/d1")
+        #expect(linked.deepLink == "craftdocs://open?spaceId=space-1&blockId=d1")
     }
 
 // MARK: - Sign-in flow
@@ -1552,6 +1600,57 @@ extension CraftTests {
         #expect((params["name"] as? String) == "craft_read")
         let arguments = try #require(params["arguments"] as? [String: Any])
         #expect((arguments["command"] as? String) == "documents list")
+    }
+
+    @Test("craft_read rows preview at the web editor once connection info names the space")
+    func oauthCraftReadLinksWebEditor() async throws {
+        defer { CraftStubURLProtocol.clear() }
+        let argsSeen = CraftBox<[String]>([])
+        stubCraftOAuthMCP(
+            advertisedTools: ["craft_read"], schemaProperties: ["command"],
+            recordedArgs: argsSeen,
+            connectionText: #"{"space":{"id":"space-1","name":"My Space"}}"#)
+        let secrets = InMemorySecretStore()
+        try seedCraftOAuth(secrets)
+        let (_, service, _, dir, _) = craftOAuthHarness(secrets: secrets)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let result = await service.listRecents()
+        #expect(result.unreachable == false)
+        #expect(result.items.map(\.openUrl) == [
+            "https://docs.craft.do/editor/d/space-1/d1",
+            "https://docs.craft.do/editor/d/space-1/d2",
+            "https://docs.craft.do/editor/d/space-1/space%2Fx",
+        ])
+        #expect(result.items[0].deepLink == "craftdocs://open?spaceId=space-1&blockId=d1")
+        let commands = argsSeen.read().compactMap { body -> String? in
+            guard let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any],
+                let params = json["params"] as? [String: Any],
+                let arguments = params["arguments"] as? [String: Any]
+            else { return nil }
+            return arguments["command"] as? String
+        }
+        #expect(commands.contains("connection info --format json"))
+        #expect(commands.last == "documents list", "the listing call still goes last")
+    }
+
+    @Test("Unreadable connection info keeps rows listing, native-open only")
+    func oauthCraftReadWithoutSpaceID() async throws {
+        defer { CraftStubURLProtocol.clear() }
+        stubCraftOAuthMCP(
+            advertisedTools: ["craft_read"], schemaProperties: ["command"],
+            connectionText: "Space: My Space")
+        let secrets = InMemorySecretStore()
+        try seedCraftOAuth(secrets)
+        let (_, service, _, dir, _) = craftOAuthHarness(secrets: secrets)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let result = await service.listRecents()
+        #expect(result.unreachable == false)
+        #expect(result.signedOut == false)
+        #expect(result.items.count == 3)
+        #expect(result.items.allSatisfy { $0.openUrl == "" })
+        #expect(result.items[0].deepLink == "craftdocs://open?blockId=d1")
     }
 
     @Test("An expired token refreshes and the rotation persists")

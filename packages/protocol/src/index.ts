@@ -110,11 +110,12 @@ export interface DocItem {
   /** ISO8601 last-modified string. */
   updatedAt: string
   /** Absolute http(s) URL opened in the right-pane preview. Empty when the
-   * row opens out-of-app via `deepLink` instead (Craft). */
+   * row has no web URL and opens out-of-app via `deepLink` instead (Craft,
+   * while its space id is unknown). */
   openUrl: string
   /** Optional out-of-app open target (Craft `craftdocs://` deep link).
-   * Rows with a deepLink open in the native app via openExternal and never
-   * load in the webview guest. */
+   * A row with no openUrl opens in the native app via openExternal and
+   * never loads in the webview guest. */
   deepLink?: string
 }
 

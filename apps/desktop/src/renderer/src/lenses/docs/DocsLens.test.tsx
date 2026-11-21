@@ -40,12 +40,11 @@ describe('docs fixtures', () => {
       expect(items).toHaveLength(12)
       for (const item of items) {
         expect(item.source).toBe(source)
+        expect(item.openUrl).toMatch(/^https:\/\//)
         if (source === 'craft') {
-          // Craft opens out-of-app: empty openUrl plus a native-app deepLink.
-          expect(item.openUrl).toBe('')
+          // Craft previews at its web editor and keeps a native-app deepLink.
+          expect(item.openUrl).toMatch(/^https:\/\/docs\.craft\.do\/editor\/d\/fixture-space\//)
           expect(item.deepLink).toMatch(/^craftdocs:\/\/open\?/)
-        } else {
-          expect(item.openUrl).toMatch(/^https:\/\//)
         }
         expect(Number.isNaN(Date.parse(item.updatedAt))).toBe(false)
       }
@@ -61,8 +60,8 @@ describe('docs fixtures', () => {
 
   /* Cross-side contract: the id/title/URL lists below are checked in on
    * both sides (mirror: "fixtureRowsMirrorCanonicalContract" in
-   * DocsRecentsTests.swift) — Craft rows carry an empty openUrl plus a
-   * craftdocs deepLink, pinned just below. TS and Swift cannot share one fixture file, so
+   * DocsRecentsTests.swift) — Craft rows carry a docs.craft.do editor URL
+   * plus a craftdocs deepLink, pinned just below. TS and Swift cannot share one fixture file, so
    * a fixture change on either side without the other fails here or there.
    * Change rows in fixtures.ts AND the Swift mirrors together. */
   it('mirrors the canonical contract the helper fixtures pin', () => {
@@ -96,26 +95,26 @@ describe('docs fixtures', () => {
         ['Journal-7c1e6a', 'Journal', 'https://www.notion.so/Journal-7c1e6a']
       ],
       craft: [
-        ['s/launch-checklist-a1b2c3', 'Launch checklist', ''],
-        ['s/essay-draft-d4e5f6', 'Essay draft', ''],
-        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', ''],
-        ['s/reading-notes-j0k1l2', 'Reading notes', ''],
-        ['s/garden-plan-m3n4o5', 'Garden plan', ''],
-        ['s/talk-outline-p6q7r8', 'Talk outline', ''],
-        ['s/budget-review-s9t0u1', 'Budget review', ''],
-        ['s/book-club-v2w3x4', 'Book club picks', ''],
-        ['s/workout-log-y5z6a7', 'Workout log', ''],
-        ['s/gift-list-b8c9d0', 'Gift list', ''],
-        ['s/home-inventory-e1f2g3', 'Home inventory', ''],
-        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', '']
+        ['s/launch-checklist-a1b2c3', 'Launch checklist', 'https://docs.craft.do/editor/d/fixture-space/s%2Flaunch-checklist-a1b2c3'],
+        ['s/essay-draft-d4e5f6', 'Essay draft', 'https://docs.craft.do/editor/d/fixture-space/s%2Fessay-draft-d4e5f6'],
+        ['s/trip-itinerary-g7h8i9', 'Trip itinerary', 'https://docs.craft.do/editor/d/fixture-space/s%2Ftrip-itinerary-g7h8i9'],
+        ['s/reading-notes-j0k1l2', 'Reading notes', 'https://docs.craft.do/editor/d/fixture-space/s%2Freading-notes-j0k1l2'],
+        ['s/garden-plan-m3n4o5', 'Garden plan', 'https://docs.craft.do/editor/d/fixture-space/s%2Fgarden-plan-m3n4o5'],
+        ['s/talk-outline-p6q7r8', 'Talk outline', 'https://docs.craft.do/editor/d/fixture-space/s%2Ftalk-outline-p6q7r8'],
+        ['s/budget-review-s9t0u1', 'Budget review', 'https://docs.craft.do/editor/d/fixture-space/s%2Fbudget-review-s9t0u1'],
+        ['s/book-club-v2w3x4', 'Book club picks', 'https://docs.craft.do/editor/d/fixture-space/s%2Fbook-club-v2w3x4'],
+        ['s/workout-log-y5z6a7', 'Workout log', 'https://docs.craft.do/editor/d/fixture-space/s%2Fworkout-log-y5z6a7'],
+        ['s/gift-list-b8c9d0', 'Gift list', 'https://docs.craft.do/editor/d/fixture-space/s%2Fgift-list-b8c9d0'],
+        ['s/home-inventory-e1f2g3', 'Home inventory', 'https://docs.craft.do/editor/d/fixture-space/s%2Fhome-inventory-e1f2g3'],
+        ['s/ideas-inbox-h4i5j6', 'Ideas inbox', 'https://docs.craft.do/editor/d/fixture-space/s%2Fideas-inbox-h4i5j6']
       ]
     }
     for (const source of ['drive', 'notion', 'craft'] as const) {
       const items = DOC_FIXTURES[source]
       expect(items.map((item) => [item.id, item.title, item.openUrl])).toEqual(canonical[source])
       if (source === 'craft') {
-        // Craft never loads in the preview guest: empty openUrl plus a
-        // native-app deepLink mirroring the helper's DocsFixtures shape.
+        // Craft previews at its web editor and keeps a native-app deepLink
+        // mirroring the helper's DocsFixtures shape.
         expect(items.map((item) => item.deepLink)).toEqual(
           items.map((item) => `craftdocs://open?spaceId=fixture-space&blockId=${item.id}`)
         )
@@ -150,6 +149,14 @@ describe('DocsLens', () => {
     fireEvent.click(screen.getByTestId(`docs-row-${target.id}`))
     const frame = screen.getByTestId('docs-preview-frame')
     expect(frame.getAttribute('src')).toBe(target.openUrl)
+  })
+
+  it('clicking a Craft row previews its web editor like a Notion row', () => {
+    renderLens()
+    const target = DOC_FIXTURES.craft[2]
+    fireEvent.click(screen.getByTestId(`docs-row-${target.id}`))
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(target.openUrl)
+    expect(screen.getByTestId(`docs-row-${target.id}`).getAttribute('aria-current')).toBe('true')
   })
 
   it('a single selection replaces the pane', () => {

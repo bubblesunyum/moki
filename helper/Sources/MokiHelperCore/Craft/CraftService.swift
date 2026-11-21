@@ -173,6 +173,8 @@ public struct CraftService: Sendable {
         let client = RemoteMCPClient(
             endpoint: craftMCPEndpoint, accessToken: accessToken, session: session)
         let tools = try await client.listTools()
+        let spaceId =
+            tools.contains(where: { $0.name == "craft_read" }) ? await mcpSpaceID(client) : nil
         let call: (name: String, arguments: JSONValue)
         if let documents = tools.first(where: { $0.name == "documents_list" }) {
             call = ("documents_list", craftDocumentsListArgs(schema: documents.inputSchema))
@@ -190,9 +192,23 @@ public struct CraftService: Sendable {
                 message: "Craft could not list documents. Please try again.")
         }
         let items = craftMCPDocuments(from: result).prefix(craftOAuthRecentsPageSize).map {
-            craftMCPDocItem(from: $0)
+            craftMCPDocItem(from: $0, spaceId: spaceId)
         }
         return DocsListRecentsResult(items: Array(items), unreachable: false, signedOut: false)
+    }
+
+    /// The space id behind the web editor links, from `connection info` on
+    /// the advertised `craft_read`. Best-effort: any failure (including an
+    /// expired token, which the documents call then reports and retries)
+    /// reads as no space id, so the listing's outcome never depends on it.
+    private func mcpSpaceID(_ client: RemoteMCPClient) async -> String? {
+        guard
+            let result = try? await client.callTool(
+                name: "craft_read",
+                arguments: .object(["command": .string("connection info --format json")])),
+            !result.isError
+        else { return nil }
+        return craftSpaceID(from: result)
     }
 }
 
@@ -218,12 +234,14 @@ func craftAppError(for error: CraftClientError) -> Error {
 
 /// One space-ordered document as a shared Docs row. `updatedAt` is the
 /// fetch time — the API exposes no modified dates, so callers must not
-/// present rows as recent. `openUrl` stays empty: the row opens out-of-app
-/// via `deepLink`.
+/// present rows as recent. `openUrl` is the web editor when the stored
+/// credential carries a space id; otherwise the row opens out-of-app via
+/// `deepLink`.
 func craftDocItem(from document: CraftDocument, spaceId: String?, fetchedAt: String) -> DocItem {
     DocItem(
         id: document.id, title: document.title, source: .craft, updatedAt: fetchedAt,
-        openUrl: "", deepLink: craftDeepLink(spaceId: spaceId, blockId: document.id))
+        openUrl: craftWebEditorURL(spaceId: spaceId, documentId: document.id) ?? "",
+        deepLink: craftDeepLink(spaceId: spaceId, blockId: document.id))
 }
 
 /// Native-app open target for one document. Built with URLComponents so ids

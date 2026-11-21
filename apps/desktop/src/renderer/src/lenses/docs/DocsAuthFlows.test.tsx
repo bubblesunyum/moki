@@ -471,7 +471,7 @@ describe('Docs Craft sign-in flow', () => {
     expect(screen.queryByTestId(`docs-row-${DOC_FIXTURES.craft[0].id}`)).toBeNull()
   })
 
-  it('deep-link rows open externally without touching the selection', async () => {
+  it('rows with no web URL open externally without touching the selection', async () => {
     const { openExternal } = setBridge(
       (_method, params) => {
         const source = (params as { source: DocSource }).source

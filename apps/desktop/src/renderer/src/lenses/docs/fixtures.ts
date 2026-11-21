@@ -38,7 +38,7 @@ function craft(id: string, title: string, minutesAgo: number): DocItem {
     title,
     source: 'craft',
     updatedAt: at(minutesAgo),
-    openUrl: '',
+    openUrl: `https://docs.craft.do/editor/d/fixture-space/${encodeURIComponent(id)}`,
     deepLink: `craftdocs://open?spaceId=fixture-space&blockId=${id}`
   }
 }
@@ -52,8 +52,9 @@ export const DOC_SOURCE_LABEL: Record<DocSource, string> = {
 }
 
 /* Preview rule shared by the lens: a row previews in the right pane only
- * when it carries an in-pane URL. Craft live rows (empty openUrl plus a
- * craftdocs:// deepLink) open out-of-app and never touch the selection. */
+ * when it carries an in-pane URL. A Craft row with no web URL (space id
+ * unknown) carries only its craftdocs:// deepLink, opens out-of-app, and
+ * never touches the selection. */
 export function isPreviewable(doc: DocItem): boolean {
   return doc.openUrl !== ''
 }
