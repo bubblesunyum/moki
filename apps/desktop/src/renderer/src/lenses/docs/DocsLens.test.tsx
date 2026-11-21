@@ -383,10 +383,31 @@ describe('DocPreview', () => {
   })
 
   it('a notion pick hops warm with src frozen', async () => {
-    // Pins the second allowlist entry: Notion's rows are the only other
+    // Pins the warm-hop fixture domain: Notion's rows are the only other
     // same-origin pair that must stay warm.
     const first = DOC_FIXTURES.notion[0]
     const second = DOC_FIXTURES.notion[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    const run = mockHop(frame)
+    rerender(<DocPreview doc={second} />)
+    expect(screen.getByTestId('docs-preview-frame')).toBe(frame)
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(first.openUrl)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+  })
+
+  it('a notion.com pick hops warm with src frozen', async () => {
+    // Live rows carry the API's page url verbatim (www.notion.com, warm
+    // hop live-confirmed mok-ono) while fixtures and the helper fallback
+    // build www.notion.so. Both domains must stay warm.
+    const first: DocItem = {
+      ...DOC_FIXTURES.notion[0],
+      openUrl: 'https://www.notion.com/Roadmap-9f2c1a'
+    }
+    const second: DocItem = {
+      ...DOC_FIXTURES.notion[1],
+      openUrl: 'https://www.notion.com/Weekly-7d4b2e'
+    }
     const { rerender } = render(<DocPreview doc={first} />)
     const frame = screen.getByTestId('docs-preview-frame')
     const run = mockHop(frame)
@@ -481,6 +502,7 @@ describe('DocPreview', () => {
     }
     expect(isWarmHopOrigin('https://docs.craft.do/editor/d/s/d')).toBe(true)
     expect(isWarmHopOrigin('https://www.notion.so/page')).toBe(true)
+    expect(isWarmHopOrigin('https://www.notion.com/page')).toBe(true)
   })
 
   it('clears the loading overlay on the in-page event for a same-app pick', () => {
