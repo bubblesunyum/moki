@@ -5,6 +5,7 @@ import { RpcProvider } from '../../rpc/provider'
 import { DOC_FIXTURES } from './fixtures'
 import { DocsLens } from './DocsLens'
 import { DocPreview } from './DocPreview'
+import { isWarmHopOrigin } from './warmHop'
 
 afterEach(() => {
   cleanup()
@@ -174,6 +175,23 @@ describe('DocsLens', () => {
     expect(screen.getByTestId(`docs-row-${target.id}`).getAttribute('aria-current')).toBe('true')
   })
 
+  it('switching drive rows loads the picked file', async () => {
+    // Drive file views never route a synthetic popstate (mok-tlq): a
+    // same-section pick must commit src as a real load, not hop in-page.
+    renderLens()
+    const second = DOC_FIXTURES.drive[1]
+    // drive[0] is auto-selected.
+    const frame = screen.getByTestId('docs-preview-frame')
+    const run = vi.fn().mockResolvedValue(undefined)
+    ;(frame as unknown as Record<string, unknown>).executeJavaScript = run
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    fireEvent.click(screen.getByTestId(`docs-row-${second.id}`))
+    await waitFor(() => {
+      expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(second.openUrl)
+    })
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('craft-to-craft picks keep one warm guest with src frozen', async () => {
     renderLens()
     const first = DOC_FIXTURES.craft[0]
@@ -329,9 +347,12 @@ describe('DocPreview', () => {
 
   /* Warm app switching (mok-ic6): same-origin picks keep the live guest —
    * the pane's src stays frozen and the guest hops in-page — while a
-   * cross-origin pick remounts fresh. jsdom has no real webview, so the
-   * hop's executeJavaScript is a mock on the bound element and the
-   * guest's navigation events are dispatched the same way dom-ready is. */
+   * cross-origin pick remounts fresh. Since mok-tlq the hop is gated on
+   * WARM_HOP_ORIGINS: only apps verified to service a synthetic popstate
+   * hop, every other same-origin pick commits src as a real load. jsdom
+   * has no real webview, so the hop's executeJavaScript is a mock on the
+   * bound element and the guest's navigation events are dispatched the
+   * same way dom-ready is. */
   function mockHop(frame: Element): ReturnType<typeof vi.fn> {
     const run = vi.fn().mockResolvedValue(undefined)
     ;(frame as unknown as Record<string, unknown>).executeJavaScript = run
@@ -359,6 +380,107 @@ describe('DocPreview', () => {
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
     const script = run.mock.calls[0][0] as string
     expect(script).toContain(JSON.stringify(second.openUrl))
+  })
+
+  it('a notion pick hops warm with src frozen', async () => {
+    // Pins the second allowlist entry: Notion's rows are the only other
+    // same-origin pair that must stay warm.
+    const first = DOC_FIXTURES.notion[0]
+    const second = DOC_FIXTURES.notion[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    const run = mockHop(frame)
+    rerender(<DocPreview doc={second} />)
+    expect(screen.getByTestId('docs-preview-frame')).toBe(frame)
+    expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(first.openUrl)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+  })
+
+  it('a drive pick commits src cold even though injection is available', async () => {
+    // Same origin, but file views never service a synthetic popstate:
+    // no hop is attempted and the pane commits the new src — the guest
+    // navigates for real.
+    const first = DOC_FIXTURES.drive[0]
+    const second = DOC_FIXTURES.drive[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    const run = mockHop(frame)
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={second} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(second.openUrl)
+    })
+    expect(run).not.toHaveBeenCalled()
+    // The overlay lifts on the new document's dom-ready, like any cold load.
+    expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    expect(screen.queryByTestId('docs-preview-loading')).toBeNull()
+  })
+
+  it('native Google Doc rows switch cold too', async () => {
+    // Live Drive rows carry webViewLink when present, so a native doc
+    // opens at its docs.google.com editor — a different origin from the
+    // drive.google.com file view. Editors never service a popstate
+    // either: both same-origin pairs across the Drive section commit
+    // src, never hop.
+    const first: DocItem = {
+      ...DOC_FIXTURES.drive[0],
+      openUrl: 'https://docs.google.com/document/d/f1/edit'
+    }
+    const second: DocItem = {
+      ...DOC_FIXTURES.drive[1],
+      openUrl: 'https://docs.google.com/document/d/f2/edit'
+    }
+    const { rerender } = render(<DocPreview doc={first} />)
+    const run = mockHop(screen.getByTestId('docs-preview-frame'))
+    fireEvent(screen.getByTestId('docs-preview-frame'), new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={second} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('docs-preview-frame').getAttribute('src')).toBe(second.openUrl)
+    })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('reselecting the doc a warm hop left hops back and lifts the overlay', async () => {
+    // The strand mok-tlq closed: a warm hop never rewrites the frozen
+    // src, so the pane must compare picks against the guest's live URL —
+    // reselecting the first doc after a hop to the second must hop back,
+    // not strand the overlay over the second doc's painted page.
+    const first = DOC_FIXTURES.craft[0]
+    const second = DOC_FIXTURES.craft[1]
+    const { rerender } = render(<DocPreview doc={first} />)
+    const frame = screen.getByTestId('docs-preview-frame')
+    const run = mockHop(frame)
+    fireEvent(frame, new CustomEvent('dom-ready'))
+    rerender(<DocPreview doc={second} />)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    fireEvent(screen.getByTestId('docs-preview-frame'), guestInPage(second.openUrl))
+    expect(screen.queryByTestId('docs-preview-loading')).toBeNull()
+    // The guest now sits on the second doc while the frozen src still
+    // says the first.
+    rerender(<DocPreview doc={first} />)
+    expect(screen.getByTestId('docs-preview-loading')).toBeDefined()
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
+    const script = run.mock.calls[1][0] as string
+    expect(script).toContain(JSON.stringify(first.openUrl))
+    fireEvent(screen.getByTestId('docs-preview-frame'), guestInPage(first.openUrl))
+    expect(screen.queryByTestId('docs-preview-loading')).toBeNull()
+  })
+
+  it('never warms the Drive origins or the Craft home', () => {
+    // Boundary pin (mok-tlq): docs.google.com looks like "just Drive"
+    // but its editor never routes a popstate — warming either Google
+    // origin, or the craft-home pick, would strand the pane on the old
+    // doc exactly the way the reported bug did.
+    for (const url of [
+      'https://drive.google.com/file/d/x/view',
+      'https://docs.google.com/document/d/x/edit',
+      'https://www.craft.do'
+    ]) {
+      expect(isWarmHopOrigin(url)).toBe(false)
+    }
+    expect(isWarmHopOrigin('https://docs.craft.do/editor/d/s/d')).toBe(true)
+    expect(isWarmHopOrigin('https://www.notion.so/page')).toBe(true)
   })
 
   it('clears the loading overlay on the in-page event for a same-app pick', () => {

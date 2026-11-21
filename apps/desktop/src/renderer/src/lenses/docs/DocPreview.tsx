@@ -1,23 +1,32 @@
-import { createElement, useEffect, useState } from 'react'
+import { createElement, useEffect, useRef, useState } from 'react'
 import { getBridge } from '../../rpc/bridge'
 import { Icon, IconButton, QuietState, Text } from '../../ui'
 import { WebPeek } from '../day/widgets/WebPeek'
 import { useSandboxedWebview, useWebviewPopup } from '../day/widgets/useWebviewGuest'
 import { hostOf, isSecureUrl, originOf, WEBVIEW_GUEST_ATTRS } from '../day/widgets/webviewShared'
+import { isWarmHopOrigin } from './warmHop'
 import type { DocItem } from '../../../../../../../packages/protocol/src/index'
 
 /* Right-pane preview: the selected doc loads in the shared hardened guest
  * (same persist:moki-websites session as the Day tile and Peek, so a sign-in
  * started anywhere finishes logged in) under a small nav bar — Back /
  * Forward / Reload / host / Open in browser. The guest is keyed by app
- * origin, not by URL: a same-app pick keeps the live element and hops
- * in-page, while a different app remounts fresh. Auth redirects inside
- * the pane follow along and retitle it; popups (OAuth windows,
- * target=_blank) open as a Peek over the shell. */
+ * origin, not by URL: a same-app pick keeps the live element for apps
+ * verified to route in-page (WARM_HOP_ORIGINS) and hops without
+ * reloading, while any other pick — cross-app or same-app — commits src
+ * as a real load. Auth redirects inside the pane follow along and retitle
+ * it; popups (OAuth windows, target=_blank) open as a Peek over the shell. */
 
 export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element {
   const [peek, setPeek] = useState<string | null>(null)
   const [current, setCurrent] = useState<string | null>(null)
+  /* Where the guest actually is: every validated navigation (full or
+   * in-page) and every mount/commit adopts it, and picks never clear it —
+   * unlike `current`, which the chrome wants blank during a load. The hop
+   * effect compares picks against this, so reselecting the doc a warm hop
+   * landed on hops back instead of stranding the overlay over the wrong
+   * page (mok-tlq; the strand itself was mok-ic6's). */
+  const liveUrlRef = useRef<string | null>(null)
   /* Load-state: the guest paints white until its page exists — the quiet
    * overlay covers that flash until the guest's first dom-ready. Same-app
    * picks hop in-page (no dom-ready fires), so the in-page navigation
@@ -25,7 +34,10 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
    * painted page, so the overlay stays down. */
   const [ready, setReady] = useState(false)
   const { setView, go, routeInPage } = useSandboxedWebview({
-    onNavigate: (url) => setCurrent(url),
+    onNavigate: (url) => {
+      liveUrlRef.current = url
+      setCurrent(url)
+    },
     onReady: () => setReady(true),
     onInPage: () => setReady(true)
   })
@@ -70,25 +82,43 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
   /* A remount means a blank guest: readiness resets with the mount, in
    * the same commit — a post-paint effect would lag a frame and flash
    * the blank page with the overlay down. Same-origin hops keep
-   * readiness; the app stays painted and the pick effect covers them. */
+   * readiness; the app stays painted and the pick effect covers them.
+   * The mount adopts its src as the live URL too: until the guest's
+   * first navigation event, that is where it is going. */
   const guestKey = committedSrc === null ? null : originOf(committedSrc)
   const [mountedKey, setMountedKey] = useState<string | null>(null)
   if (guestKey !== mountedKey) {
     setMountedKey(guestKey)
+    liveUrlRef.current = committedSrc
     if (guestKey !== null) setReady(false)
   }
 
-  /* Same-app warm switch: the frozen src stays put and the live guest
-   * hops in-page instead — a history.pushState the SPA routes itself
-   * (popstate is the router contract; the pane's Reload is the honest
-   * escape hatch if an app misroutes). The hop's own in-page navigation
-   * event lifts the overlay. Injection failure falls back to a cold src
-   * commit: correct, just not warm. Unsafe URLs never reach the hop —
-   * the hook rejects them — and cross-origin picks adopt above, so this
-   * effect only ever sees same-origin http(s) pairs. */
+  /* Same-app warm switch for verified apps only (WARM_HOP_ORIGINS): the
+   * frozen src stays put and the live guest hops in-page — a
+   * history.pushState the site's running app routes itself (popstate is
+   * the router contract; the pane's Reload is the honest escape hatch if
+   * an app misroutes). The comparison is against the guest's live URL,
+   * not the frozen src — a warm hop never rewrites the src, so the pick
+   * that lands back on the live URL (a reselect) must still hop, and the
+   * pick that equals it must not re-load the page out from under itself.
+   * Any other same-origin pick (Drive file views, Docs editors, future
+   * apps) commits src — a real load, because those pages never service
+   * a synthetic popstate and a hop would strand the pane on the old doc.
+   * The hop's own in-page navigation event lifts the overlay; a cold
+   * commit waits for the new document's dom-ready. Injection failure
+   * falls back to the cold src commit: correct, just not warm. Unsafe
+   * URLs never reach either path — the hook rejects them — and
+   * cross-origin picks adopt above, so this effect only ever sees
+   * same-origin http(s) pairs. */
   useEffect(() => {
-    if (nextUrl === null || committedSrc === null || nextUrl === committedSrc) return
+    if (nextUrl === null || committedSrc === null) return
     if (originOf(nextUrl) !== originOf(committedSrc)) return
+    if (nextUrl === liveUrlRef.current) return
+    if (!isWarmHopOrigin(nextUrl)) {
+      liveUrlRef.current = nextUrl
+      setCommittedSrc(nextUrl)
+      return
+    }
     let cancelled = false
     routeInPage(nextUrl).catch(() => {
       if (!cancelled) setCommittedSrc(nextUrl)
@@ -114,10 +144,11 @@ export function DocPreview({ doc }: { doc: DocItem | null }): React.JSX.Element 
   }
 
   function expandPeek(url: string): void {
-    /* Same rules as a pick: a same-app expand hops the live guest (the
-     * effect above owns it), a cross-app one remounts it. Either way the
-     * overlay covers the swap — until the in-page event for a hop, until
-     * the new page's first dom-ready for a remount. */
+    /* The effect above owns the route by the same rules as a pick: a
+     * verified-app expand hops the live guest, anything else commits or
+     * remounts. Either way the overlay covers the swap — until the
+     * in-page event for a hop, until the new page's first dom-ready for
+     * a cold load. */
     setReady(false)
     setOverride(url)
     setCurrent(url)
